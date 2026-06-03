@@ -155,17 +155,27 @@ def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_json(ranked: list[RankedIssue], limit: int) -> str:
+    payload = [dataclasses.asdict(issue) for issue in ranked[:limit]]
+    return json.dumps(payload, indent=2) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rank GitHub issues for credible OSS contributions.")
     parser.add_argument("file", nargs="?", help="JSON file from gh issue list. Defaults to stdin.")
     parser.add_argument("--limit", type=int, default=10, help="number of issues to print")
+    parser.add_argument("--format", choices=("markdown", "json"), default="markdown", help="output format")
     args = parser.parse_args(argv)
 
     raw = open(args.file, encoding="utf-8").read() if args.file else sys.stdin.read()
     data = json.loads(raw)
     if not isinstance(data, list):
         raise SystemExit("expected a JSON array of issues")
-    print(render_markdown(rank_issues(data), args.limit), end="")
+    ranked = rank_issues(data)
+    if args.format == "json":
+        print(render_json(ranked, args.limit), end="")
+    else:
+        print(render_markdown(ranked, args.limit), end="")
     return 0
 
 

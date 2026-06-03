@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from contrib_radar import rank_issue, rank_issues, render_markdown
+from contrib_radar import rank_issue, rank_issues, render_json, render_markdown
 
 NOW = datetime(2026, 6, 3, tzinfo=timezone.utc)
 
@@ -50,6 +50,12 @@ class ContribRadarTests(unittest.TestCase):
         self.assertIn("# contrib-radar results", output)
         self.assertIn("#3", output)
         self.assertIn("https://example.test/3", output)
+
+    def test_render_json_outputs_machine_readable_scores(self):
+        ranked = [rank_issue({"number": 3, "title": "Fix crash", "url": "https://example.test/3"}, now=NOW)]
+        output = render_json(ranked, limit=1)
+        self.assertIn('"score"', output)
+        self.assertIn('"number": 3', output)
 
 
 if __name__ == "__main__":
