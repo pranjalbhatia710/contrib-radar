@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contrib-radar"
+version = "0.1.0"
+description = "Rank GitHub issues for credible, low-spam OSS contributions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Pranjal Bhatia"}]
+keywords = ["github", "open-source", "issues", "maintainers", "cli"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+]
+
+[project.scripts]
+contrib-radar = "contrib_radar:main"
