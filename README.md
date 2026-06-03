@@ -69,6 +69,10 @@ or:
 python3 -m pytest
 ```
 
+## Maintainer-first usage
+
+See [docs/maintainer-notes.md](docs/maintainer-notes.md) for the intended workflow. The score is a triage hint, not a license to spam maintainers.
+
 ## License
 
 MIT
