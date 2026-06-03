@@ -1,0 +1,22 @@
+[
+  {
+    "number": 42,
+    "title": "Fix docs typo in install guide",
+    "body": "Small typo in the quickstart.",
+    "labels": [{"name": "good first issue"}, {"name": "documentation"}],
+    "comments": 0,
+    "assignees": [],
+    "updatedAt": "2026-06-01T00:00:00Z",
+    "url": "https://github.com/example/project/issues/42"
+  },
+  {
+    "number": 108,
+    "title": "Architecture rewrite tracking issue",
+    "body": "Umbrella roadmap for a migration.",
+    "labels": [{"name": "stale"}],
+    "comments": 24,
+    "assignees": [{"login": "maintainer"}],
+    "updatedAt": "2024-01-01T00:00:00Z",
+    "url": "https://github.com/example/project/issues/108"
+  }
+]
