@@ -141,6 +141,13 @@ def rank_issues(issues: Iterable[dict[str, Any]]) -> list[RankedIssue]:
     return sorted(ranked, key=lambda issue: (-issue.score, issue.number))
 
 
+def filter_ranked(ranked: Iterable[RankedIssue], min_score: int | None = None) -> list[RankedIssue]:
+    """Return ranked issues that meet the optional minimum score."""
+    if min_score is None:
+        return list(ranked)
+    return [issue for issue in ranked if issue.score >= min_score]
+
+
 def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
     lines = ["# contrib-radar results", ""]
     for issue in ranked[:limit]:
@@ -164,14 +171,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rank GitHub issues for credible OSS contributions.")
     parser.add_argument("file", nargs="?", help="JSON file from gh issue list. Defaults to stdin.")
     parser.add_argument("--limit", type=int, default=10, help="number of issues to print")
+    parser.add_argument(
+        "--min-score",
+        type=int,
+        default=None,
+        help="only print issues with this score or higher",
+    )
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown", help="output format")
     args = parser.parse_args(argv)
+
+    if args.min_score is not None and not 0 <= args.min_score <= 100:
+        raise SystemExit("--min-score must be between 0 and 100")
 
     raw = open(args.file, encoding="utf-8").read() if args.file else sys.stdin.read()
     data = json.loads(raw)
     if not isinstance(data, list):
         raise SystemExit("expected a JSON array of issues")
-    ranked = rank_issues(data)
+    ranked = filter_ranked(rank_issues(data), args.min_score)
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")
     else:
