@@ -89,9 +89,24 @@ class ContribRadarTests(unittest.TestCase):
             {"number": 3, "labels": [{"name": "question"}]},
         ]
 
-        filtered = filter_issues_by_label(issues, include_labels=["BUG", "docs"])
+        filtered = filter_issues_by_label(issues, include_labels=["BUG", "feature"])
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
+
+    def test_filter_issues_by_label_matches_common_aliases(self):
+        issues = [
+            {"number": 1, "labels": [{"name": "documentation"}]},
+            {"number": 2, "labels": [{"name": "good-first-issue"}]},
+            {"number": 3, "labels": [{"name": "help wanted"}]},
+            {"number": 4, "labels": [{"name": "bug"}]},
+        ]
+
+        filtered = filter_issues_by_label(
+            issues,
+            include_labels=["docs", "good first issue", "help-wanted"],
+        )
+
+        self.assertEqual([issue["number"] for issue in filtered], [1, 2, 3])
 
     def test_filter_issues_by_label_exclude_wins_over_include(self):
         issues = [

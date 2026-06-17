@@ -37,6 +37,16 @@ NEGATIVE_LABELS = {
     "needs-design": -12,
     "discussion": -10,
 }
+LABEL_ALIASES = {
+    "docs": "documentation",
+    "doc": "documentation",
+    "good-first-issue": "good first issue",
+    "good first issue": "good first issue",
+    "help-wanted": "help wanted",
+    "help wanted": "help wanted",
+    "test": "tests",
+    "testing": "tests",
+}
 BROAD_WORDS = re.compile(r"\b(epic|roadmap|architecture|rewrite|migration|tracking|umbrella|rfc)\b", re.I)
 CONCRETE_WORDS = re.compile(r"\b(fix|add|update|document|test|error|typo|crash|regression|missing)\b", re.I)
 GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,updatedAt,url"
@@ -150,8 +160,13 @@ def filter_ranked(ranked: Iterable[RankedIssue], min_score: int | None = None) -
     return [issue for issue in ranked if issue.score >= min_score]
 
 
+def _canonical_label(label: str) -> str:
+    normalized = re.sub(r"\s+", " ", label.strip().lower())
+    return LABEL_ALIASES.get(normalized, normalized)
+
+
 def _normalize_label_filters(labels: Iterable[str] | None) -> set[str]:
-    return {label.strip().lower() for label in labels or [] if label.strip()}
+    return {_canonical_label(label) for label in labels or [] if label.strip()}
 
 
 def filter_issues_by_label(
@@ -170,7 +185,7 @@ def filter_issues_by_label(
     exclude = _normalize_label_filters(exclude_labels)
     filtered: list[dict[str, Any]] = []
     for issue in issues:
-        labels = {label.lower() for label in _label_names(issue.get("labels", []))}
+        labels = {_canonical_label(label) for label in _label_names(issue.get("labels", []))}
         if include and labels.isdisjoint(include):
             continue
         if exclude and not labels.isdisjoint(exclude):
