@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from contrib_radar import (
+    filter_issues_by_label,
     filter_ranked,
     load_issues_from_gh,
     main,
@@ -81,6 +82,31 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual([issue.number for issue in filtered], [1])
 
+    def test_filter_issues_by_label_includes_any_requested_label(self):
+        issues = [
+            {"number": 1, "labels": [{"name": "bug"}]},
+            {"number": 2, "labels": [{"name": "documentation"}]},
+            {"number": 3, "labels": [{"name": "question"}]},
+        ]
+
+        filtered = filter_issues_by_label(issues, include_labels=["BUG", "docs"])
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
+    def test_filter_issues_by_label_exclude_wins_over_include(self):
+        issues = [
+            {"number": 1, "labels": [{"name": "good first issue"}]},
+            {"number": 2, "labels": [{"name": "good first issue"}, {"name": "blocked"}]},
+        ]
+
+        filtered = filter_issues_by_label(
+            issues,
+            include_labels=["good first issue"],
+            exclude_labels=["blocked"],
+        )
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
     def test_main_rejects_invalid_min_score(self):
         with self.assertRaisesRegex(SystemExit, "--min-score must be between 0 and 100"):
             main(["--min-score", "101"])
@@ -95,6 +121,22 @@ class ContribRadarTests(unittest.TestCase):
         stdout = StringIO()
         with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
             exit_code = main(["--format", "json", "--min-score", "80"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_main_applies_label_filters_before_scoring(self):
+        issues = [
+            {"number": 1, "title": "Fix crash", "labels": [{"name": "bug"}], "comments": 0},
+            {"number": 2, "title": "Fix flaky test", "labels": [{"name": "bug"}, {"name": "blocked"}], "comments": 0},
+            {"number": 3, "title": "Document setup", "labels": [{"name": "documentation"}], "comments": 0},
+        ]
+
+        from io import StringIO
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main(["--format", "json", "--include-label", "bug", "--exclude-label", "blocked"])
 
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())

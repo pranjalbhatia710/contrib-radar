@@ -29,6 +29,14 @@ python3 contrib_radar.py issues.json --limit 10
 
 # Show only high-confidence candidates for a focused contribution session.
 python3 contrib_radar.py issues.json --min-score 80 --limit 5
+
+# Focus on bug/docs work and skip known blocked queues before scoring.
+python3 contrib_radar.py issues.json \
+  --include-label bug \
+  --include-label documentation \
+  --exclude-label blocked \
+  --exclude-label "needs reproduction" \
+  --min-score 80
 ```
 
 If you already have the GitHub CLI authenticated, you can skip the intermediate
@@ -36,6 +44,7 @@ JSON file and fetch open issues directly:
 
 ```bash
 python3 contrib_radar.py --repo owner/repo --issue-limit 100 --min-score 80 --limit 5
+python3 contrib_radar.py --repo owner/repo --include-label "help wanted" --exclude-label blocked
 ```
 
 The direct mode runs `gh issue list` with the same issue fields shown above, then

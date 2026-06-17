@@ -150,6 +150,35 @@ def filter_ranked(ranked: Iterable[RankedIssue], min_score: int | None = None) -
     return [issue for issue in ranked if issue.score >= min_score]
 
 
+def _normalize_label_filters(labels: Iterable[str] | None) -> set[str]:
+    return {label.strip().lower() for label in labels or [] if label.strip()}
+
+
+def filter_issues_by_label(
+    issues: Iterable[dict[str, Any]],
+    *,
+    include_labels: Iterable[str] | None = None,
+    exclude_labels: Iterable[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Filter raw issues before ranking using case-insensitive label names.
+
+    Include filters are OR-ed: an issue passes when it has at least one requested
+    label. Exclude filters always win, which lets contributors avoid queues such
+    as `blocked` or `needs reproduction` even when they also carry positive tags.
+    """
+    include = _normalize_label_filters(include_labels)
+    exclude = _normalize_label_filters(exclude_labels)
+    filtered: list[dict[str, Any]] = []
+    for issue in issues:
+        labels = {label.lower() for label in _label_names(issue.get("labels", []))}
+        if include and labels.isdisjoint(include):
+            continue
+        if exclude and not labels.isdisjoint(exclude):
+            continue
+        filtered.append(issue)
+    return filtered
+
+
 def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
     lines = ["# contrib-radar results", ""]
     for issue in ranked[:limit]:
@@ -222,6 +251,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--limit", type=int, default=10, help="number of issues to print")
     parser.add_argument(
+        "--include-label",
+        action="append",
+        default=[],
+        help="only consider issues with this label; repeat to accept any listed label",
+    )
+    parser.add_argument(
+        "--exclude-label",
+        action="append",
+        default=[],
+        help="skip issues with this label before scoring; repeat for multiple labels",
+    )
+    parser.add_argument(
         "--min-score",
         type=int,
         default=None,
@@ -239,6 +280,11 @@ def main(argv: list[str] | None = None) -> int:
         load_issues_from_gh(args.repo, args.issue_limit)
         if args.repo
         else load_issues_from_file_or_stdin(args.file)
+    )
+    data = filter_issues_by_label(
+        data,
+        include_labels=args.include_label,
+        exclude_labels=args.exclude_label,
     )
     ranked = filter_ranked(rank_issues(data), args.min_score)
     if args.format == "json":
