@@ -11,6 +11,7 @@ import argparse
 import dataclasses
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -38,6 +39,7 @@ NEGATIVE_LABELS = {
 }
 BROAD_WORDS = re.compile(r"\b(epic|roadmap|architecture|rewrite|migration|tracking|umbrella|rfc)\b", re.I)
 CONCRETE_WORDS = re.compile(r"\b(fix|add|update|document|test|error|typo|crash|regression|missing)\b", re.I)
+GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,updatedAt,url"
 
 @dataclasses.dataclass(frozen=True)
 class RankedIssue:
@@ -167,9 +169,57 @@ def render_json(ranked: list[RankedIssue], limit: int) -> str:
     return json.dumps(payload, indent=2) + "\n"
 
 
+def load_issues_from_gh(repo: str, issue_limit: int) -> list[dict[str, Any]]:
+    """Fetch open issues from GitHub using the installed gh CLI."""
+    if issue_limit < 1:
+        raise SystemExit("--issue-limit must be at least 1")
+    cmd = [
+        "gh",
+        "issue",
+        "list",
+        "--repo",
+        repo,
+        "--state",
+        "open",
+        "--limit",
+        str(issue_limit),
+        "--json",
+        GH_ISSUE_FIELDS,
+    ]
+    try:
+        completed = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise SystemExit("gh CLI is required when using --repo") from exc
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout).strip()
+        message = "gh issue list failed"
+        if details:
+            message = f"{message}: {details}"
+        raise SystemExit(message) from exc
+    data = json.loads(completed.stdout)
+    if not isinstance(data, list):
+        raise SystemExit("gh returned an unexpected issue payload")
+    return data
+
+
+def load_issues_from_file_or_stdin(path: str | None) -> list[dict[str, Any]]:
+    raw = open(path, encoding="utf-8").read() if path else sys.stdin.read()
+    data = json.loads(raw)
+    if not isinstance(data, list):
+        raise SystemExit("expected a JSON array of issues")
+    return data
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rank GitHub issues for credible OSS contributions.")
     parser.add_argument("file", nargs="?", help="JSON file from gh issue list. Defaults to stdin.")
+    parser.add_argument("--repo", help="GitHub repository to fetch directly with gh, for example owner/repo")
+    parser.add_argument(
+        "--issue-limit",
+        type=int,
+        default=100,
+        help="number of open issues to fetch when --repo is used",
+    )
     parser.add_argument("--limit", type=int, default=10, help="number of issues to print")
     parser.add_argument(
         "--min-score",
@@ -183,10 +233,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.min_score is not None and not 0 <= args.min_score <= 100:
         raise SystemExit("--min-score must be between 0 and 100")
 
-    raw = open(args.file, encoding="utf-8").read() if args.file else sys.stdin.read()
-    data = json.loads(raw)
-    if not isinstance(data, list):
-        raise SystemExit("expected a JSON array of issues")
+    if args.repo and args.file:
+        raise SystemExit("pass either --repo or a JSON file, not both")
+    data = (
+        load_issues_from_gh(args.repo, args.issue_limit)
+        if args.repo
+        else load_issues_from_file_or_stdin(args.file)
+    )
     ranked = filter_ranked(rank_issues(data), args.min_score)
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")

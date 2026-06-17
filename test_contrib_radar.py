@@ -1,8 +1,18 @@
 import json
+import subprocess
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 
-from contrib_radar import filter_ranked, main, rank_issue, rank_issues, render_json, render_markdown
+from contrib_radar import (
+    filter_ranked,
+    load_issues_from_gh,
+    main,
+    rank_issue,
+    rank_issues,
+    render_json,
+    render_markdown,
+)
 
 NOW = datetime(2026, 6, 3, tzinfo=timezone.utc)
 
@@ -82,8 +92,6 @@ class ContribRadarTests(unittest.TestCase):
         ]
 
         from io import StringIO
-        from unittest.mock import patch
-
         stdout = StringIO()
         with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
             exit_code = main(["--format", "json", "--min-score", "80"])
@@ -91,6 +99,35 @@ class ContribRadarTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())
         self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_load_issues_from_gh_invokes_issue_list(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps([{"number": 9, "title": "Fix docs"}]),
+            stderr="",
+        )
+
+        with patch("subprocess.run", return_value=completed) as run:
+            issues = load_issues_from_gh("owner/repo", 25)
+
+        self.assertEqual(issues, [{"number": 9, "title": "Fix docs"}])
+        command = run.call_args.args[0]
+        self.assertIn("owner/repo", command)
+        self.assertIn("25", command)
+        self.assertIn("number,title,body,labels,comments,assignees,updatedAt,url", command)
+
+    def test_load_issues_from_gh_reports_cli_errors(self):
+        error = subprocess.CalledProcessError(1, ["gh"], stderr="not found")
+
+        with patch("subprocess.run", side_effect=error), self.assertRaisesRegex(
+            SystemExit, "gh issue list failed: not found"
+        ):
+            load_issues_from_gh("owner/repo", 10)
+
+    def test_main_rejects_repo_and_file_together(self):
+        with self.assertRaisesRegex(SystemExit, "pass either --repo or a JSON file"):
+            main(["issues.json", "--repo", "owner/repo"])
 
 
 if __name__ == "__main__":

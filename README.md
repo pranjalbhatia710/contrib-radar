@@ -31,6 +31,17 @@ python3 contrib_radar.py issues.json --limit 10
 python3 contrib_radar.py issues.json --min-score 80 --limit 5
 ```
 
+If you already have the GitHub CLI authenticated, you can skip the intermediate
+JSON file and fetch open issues directly:
+
+```bash
+python3 contrib_radar.py --repo owner/repo --issue-limit 100 --min-score 80 --limit 5
+```
+
+The direct mode runs `gh issue list` with the same issue fields shown above, then
+applies the local scoring model. It still prints the transparent reason string
+for every ranked issue.
+
 Example output:
 
 ```text
