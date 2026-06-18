@@ -194,6 +194,28 @@ def filter_issues_by_label(
     return filtered
 
 
+def filter_issues_by_workflow(
+    issues: Iterable[dict[str, Any]],
+    *,
+    unassigned_only: bool = False,
+    max_comments: int | None = None,
+) -> list[dict[str, Any]]:
+    """Filter raw issues for contribution-session workflow constraints.
+
+    These filters are intentionally separate from scoring: sometimes contributors
+    need to completely skip assigned or high-churn issues instead of merely
+    ranking them lower.
+    """
+    filtered: list[dict[str, Any]] = []
+    for issue in issues:
+        if unassigned_only and issue.get("assignees"):
+            continue
+        if max_comments is not None and int(issue.get("comments") or 0) > max_comments:
+            continue
+        filtered.append(issue)
+    return filtered
+
+
 def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
     lines = ["# contrib-radar results", ""]
     for issue in ranked[:limit]:
@@ -278,6 +300,17 @@ def main(argv: list[str] | None = None) -> int:
         help="skip issues with this label before scoring; repeat for multiple labels",
     )
     parser.add_argument(
+        "--unassigned-only",
+        action="store_true",
+        help="skip issues that already have assignees before scoring",
+    )
+    parser.add_argument(
+        "--max-comments",
+        type=int,
+        default=None,
+        help="skip issues with more than this many comments before scoring",
+    )
+    parser.add_argument(
         "--min-score",
         type=int,
         default=None,
@@ -288,6 +321,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.min_score is not None and not 0 <= args.min_score <= 100:
         raise SystemExit("--min-score must be between 0 and 100")
+    if args.max_comments is not None and args.max_comments < 0:
+        raise SystemExit("--max-comments must be zero or greater")
 
     if args.repo and args.file:
         raise SystemExit("pass either --repo or a JSON file, not both")
@@ -300,6 +335,11 @@ def main(argv: list[str] | None = None) -> int:
         data,
         include_labels=args.include_label,
         exclude_labels=args.exclude_label,
+    )
+    data = filter_issues_by_workflow(
+        data,
+        unassigned_only=args.unassigned_only,
+        max_comments=args.max_comments,
     )
     ranked = filter_ranked(rank_issues(data), args.min_score)
     if args.format == "json":

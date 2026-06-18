@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from contrib_radar import (
     filter_issues_by_label,
+    filter_issues_by_workflow,
     filter_ranked,
     load_issues_from_gh,
     main,
@@ -122,9 +123,24 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
 
+    def test_filter_issues_by_workflow_skips_assigned_and_comment_churn(self):
+        issues = [
+            {"number": 1, "comments": 2, "assignees": []},
+            {"number": 2, "comments": 1, "assignees": [{"login": "maintainer"}]},
+            {"number": 3, "comments": 7, "assignees": []},
+        ]
+
+        filtered = filter_issues_by_workflow(issues, unassigned_only=True, max_comments=3)
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
     def test_main_rejects_invalid_min_score(self):
         with self.assertRaisesRegex(SystemExit, "--min-score must be between 0 and 100"):
             main(["--min-score", "101"])
+
+    def test_main_rejects_invalid_max_comments(self):
+        with self.assertRaisesRegex(SystemExit, "--max-comments must be zero or greater"):
+            main(["--max-comments", "-1"])
 
     def test_main_filters_json_output_by_min_score(self):
         issues = [
@@ -152,6 +168,28 @@ class ContribRadarTests(unittest.TestCase):
         stdout = StringIO()
         with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
             exit_code = main(["--format", "json", "--include-label", "bug", "--exclude-label", "blocked"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_main_applies_workflow_filters_before_scoring(self):
+        issues = [
+            {"number": 1, "title": "Fix crash", "labels": [{"name": "bug"}], "comments": 1, "assignees": []},
+            {
+                "number": 2,
+                "title": "Fix assigned crash",
+                "labels": [{"name": "bug"}],
+                "comments": 1,
+                "assignees": [{"login": "maintainer"}],
+            },
+            {"number": 3, "title": "Fix debated crash", "labels": [{"name": "bug"}], "comments": 9, "assignees": []},
+        ]
+
+        from io import StringIO
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main(["--format", "json", "--unassigned-only", "--max-comments", "3"])
 
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())

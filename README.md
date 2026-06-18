@@ -36,6 +36,8 @@ python3 contrib_radar.py issues.json \
   --include-label documentation \
   --exclude-label blocked \
   --exclude-label "needs reproduction" \
+  --unassigned-only \
+  --max-comments 3 \
   --min-score 80
 ```
 
@@ -44,12 +46,16 @@ JSON file and fetch open issues directly:
 
 ```bash
 python3 contrib_radar.py --repo owner/repo --issue-limit 100 --min-score 80 --limit 5
-python3 contrib_radar.py --repo owner/repo --include-label "help wanted" --exclude-label blocked
+python3 contrib_radar.py --repo owner/repo --include-label "help wanted" --exclude-label blocked --unassigned-only
 ```
 
 The direct mode runs `gh issue list` with the same issue fields shown above, then
 applies the local scoring model. It still prints the transparent reason string
 for every ranked issue.
+
+Use `--unassigned-only` and `--max-comments N` when you want a contribution
+session to skip already-owned or high-churn issues entirely, rather than merely
+penalizing them in the score.
 
 Example output:
 
