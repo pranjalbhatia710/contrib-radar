@@ -216,6 +216,31 @@ def filter_issues_by_workflow(
     return filtered
 
 
+def filter_issues_by_activity(
+    issues: Iterable[dict[str, Any]],
+    *,
+    updated_within_days: int | None = None,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Filter raw issues by recent maintainer or reporter activity.
+
+    Issues without a parseable `updatedAt` timestamp are skipped when the filter
+    is active. That keeps focused contribution sessions from accidentally
+    targeting stale imported data.
+    """
+    if updated_within_days is None:
+        return list(issues)
+    now = now or datetime.now(timezone.utc)
+    filtered: list[dict[str, Any]] = []
+    for issue in issues:
+        updated = _parse_time(issue.get("updatedAt") or issue.get("updated_at"))
+        if not updated:
+            continue
+        if (now - updated).days <= updated_within_days:
+            filtered.append(issue)
+    return filtered
+
+
 def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
     lines = ["# contrib-radar results", ""]
     for issue in ranked[:limit]:
@@ -311,6 +336,12 @@ def main(argv: list[str] | None = None) -> int:
         help="skip issues with more than this many comments before scoring",
     )
     parser.add_argument(
+        "--updated-within-days",
+        type=int,
+        default=None,
+        help="skip issues that have not been updated within this many days",
+    )
+    parser.add_argument(
         "--min-score",
         type=int,
         default=None,
@@ -323,6 +354,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--min-score must be between 0 and 100")
     if args.max_comments is not None and args.max_comments < 0:
         raise SystemExit("--max-comments must be zero or greater")
+    if args.updated_within_days is not None and args.updated_within_days < 0:
+        raise SystemExit("--updated-within-days must be zero or greater")
 
     if args.repo and args.file:
         raise SystemExit("pass either --repo or a JSON file, not both")
@@ -341,6 +374,7 @@ def main(argv: list[str] | None = None) -> int:
         unassigned_only=args.unassigned_only,
         max_comments=args.max_comments,
     )
+    data = filter_issues_by_activity(data, updated_within_days=args.updated_within_days)
     ranked = filter_ranked(rank_issues(data), args.min_score)
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")

@@ -38,6 +38,7 @@ python3 contrib_radar.py issues.json \
   --exclude-label "needs reproduction" \
   --unassigned-only \
   --max-comments 3 \
+  --updated-within-days 30 \
   --min-score 80
 ```
 
@@ -53,9 +54,9 @@ The direct mode runs `gh issue list` with the same issue fields shown above, the
 applies the local scoring model. It still prints the transparent reason string
 for every ranked issue.
 
-Use `--unassigned-only` and `--max-comments N` when you want a contribution
-session to skip already-owned or high-churn issues entirely, rather than merely
-penalizing them in the score.
+Use `--unassigned-only`, `--max-comments N`, and `--updated-within-days N` when
+you want a contribution session to skip already-owned, high-churn, or stale
+issues entirely, rather than merely penalizing them in the score.
 
 Example output:
 

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from contrib_radar import (
+    filter_issues_by_activity,
     filter_issues_by_label,
     filter_issues_by_workflow,
     filter_ranked,
@@ -134,6 +135,17 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
 
+    def test_filter_issues_by_activity_skips_stale_and_missing_timestamps(self):
+        issues = [
+            {"number": 1, "updatedAt": "2026-06-01T00:00:00Z"},
+            {"number": 2, "updatedAt": "2026-05-01T00:00:00Z"},
+            {"number": 3},
+        ]
+
+        filtered = filter_issues_by_activity(issues, updated_within_days=14, now=NOW)
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
     def test_main_rejects_invalid_min_score(self):
         with self.assertRaisesRegex(SystemExit, "--min-score must be between 0 and 100"):
             main(["--min-score", "101"])
@@ -141,6 +153,10 @@ class ContribRadarTests(unittest.TestCase):
     def test_main_rejects_invalid_max_comments(self):
         with self.assertRaisesRegex(SystemExit, "--max-comments must be zero or greater"):
             main(["--max-comments", "-1"])
+
+    def test_main_rejects_invalid_updated_within_days(self):
+        with self.assertRaisesRegex(SystemExit, "--updated-within-days must be zero or greater"):
+            main(["--updated-within-days", "-1"])
 
     def test_main_filters_json_output_by_min_score(self):
         issues = [
@@ -190,6 +206,25 @@ class ContribRadarTests(unittest.TestCase):
         stdout = StringIO()
         with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
             exit_code = main(["--format", "json", "--unassigned-only", "--max-comments", "3"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_main_applies_activity_filter_before_scoring(self):
+        issues = [
+            {"number": 1, "title": "Fix current crash", "updatedAt": "2026-06-03T00:00:00Z"},
+            {"number": 2, "title": "Fix old crash", "updatedAt": "2025-06-03T00:00:00Z"},
+        ]
+
+        from io import StringIO
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout), patch(
+            "contrib_radar.datetime"
+        ) as fake_datetime:
+            fake_datetime.now.return_value = NOW
+            fake_datetime.fromisoformat = datetime.fromisoformat
+            exit_code = main(["--format", "json", "--updated-within-days", "30"])
 
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())
