@@ -7,6 +7,7 @@ from unittest.mock import patch
 from contrib_radar import (
     filter_issues_by_activity,
     filter_issues_by_label,
+    filter_issues_by_text,
     filter_issues_by_workflow,
     filter_ranked,
     load_issues_from_gh,
@@ -146,6 +147,31 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
 
+    def test_filter_issues_by_text_includes_title_or_body_matches(self):
+        issues = [
+            {"number": 1, "title": "Fix CAD export", "body": ""},
+            {"number": 2, "title": "Docs", "body": "Agent setup is unclear."},
+            {"number": 3, "title": "Improve billing page", "body": ""},
+        ]
+
+        filtered = filter_issues_by_text(issues, include_terms=["cad", "agent"])
+
+        self.assertEqual([issue["number"] for issue in filtered], [1, 2])
+
+    def test_filter_issues_by_text_exclude_wins_over_include(self):
+        issues = [
+            {"number": 1, "title": "Fix robotics dataset", "body": "Small bug."},
+            {"number": 2, "title": "Fix robotics API", "body": "Breaking change proposal."},
+        ]
+
+        filtered = filter_issues_by_text(
+            issues,
+            include_terms=["robotics"],
+            exclude_terms=["breaking change"],
+        )
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
     def test_main_rejects_invalid_min_score(self):
         with self.assertRaisesRegex(SystemExit, "--min-score must be between 0 and 100"):
             main(["--min-score", "101"])
@@ -225,6 +251,31 @@ class ContribRadarTests(unittest.TestCase):
             fake_datetime.now.return_value = NOW
             fake_datetime.fromisoformat = datetime.fromisoformat
             exit_code = main(["--format", "json", "--updated-within-days", "30"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_main_applies_text_filters_before_scoring(self):
+        issues = [
+            {"number": 1, "title": "Fix agent trace export", "body": "Small failure."},
+            {"number": 2, "title": "Fix agent migration", "body": "Breaking change discussion."},
+            {"number": 3, "title": "Fix billing chart", "body": "Small failure."},
+        ]
+
+        from io import StringIO
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main(
+                [
+                    "--format",
+                    "json",
+                    "--include-text",
+                    "agent",
+                    "--exclude-text",
+                    "breaking change",
+                ]
+            )
 
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())

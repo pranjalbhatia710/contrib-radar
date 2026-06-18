@@ -241,6 +241,31 @@ def filter_issues_by_activity(
     return filtered
 
 
+def filter_issues_by_text(
+    issues: Iterable[dict[str, Any]],
+    *,
+    include_terms: Iterable[str] | None = None,
+    exclude_terms: Iterable[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Filter raw issues by case-insensitive title/body text matches.
+
+    Include terms are OR-ed so a focused session can accept any of several
+    domains, such as `cad`, `robot`, or `agent`. Exclude terms always win to
+    remove risky queues like `breaking change` or `needs reproduction`.
+    """
+    include = tuple(term.casefold() for term in include_terms or [] if term.strip())
+    exclude = tuple(term.casefold() for term in exclude_terms or [] if term.strip())
+    filtered: list[dict[str, Any]] = []
+    for issue in issues:
+        haystack = f"{issue.get('title') or ''}\n{issue.get('body') or ''}".casefold()
+        if include and not any(term in haystack for term in include):
+            continue
+        if exclude and any(term in haystack for term in exclude):
+            continue
+        filtered.append(issue)
+    return filtered
+
+
 def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
     lines = ["# contrib-radar results", ""]
     for issue in ranked[:limit]:
@@ -342,6 +367,18 @@ def main(argv: list[str] | None = None) -> int:
         help="skip issues that have not been updated within this many days",
     )
     parser.add_argument(
+        "--include-text",
+        action="append",
+        default=[],
+        help="only consider issues whose title or body contains this text; repeat to accept any term",
+    )
+    parser.add_argument(
+        "--exclude-text",
+        action="append",
+        default=[],
+        help="skip issues whose title or body contains this text; repeat for multiple terms",
+    )
+    parser.add_argument(
         "--min-score",
         type=int,
         default=None,
@@ -375,6 +412,7 @@ def main(argv: list[str] | None = None) -> int:
         max_comments=args.max_comments,
     )
     data = filter_issues_by_activity(data, updated_within_days=args.updated_within_days)
+    data = filter_issues_by_text(data, include_terms=args.include_text, exclude_terms=args.exclude_text)
     ranked = filter_ranked(rank_issues(data), args.min_score)
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")

@@ -48,6 +48,13 @@ JSON file and fetch open issues directly:
 ```bash
 python3 contrib_radar.py --repo owner/repo --issue-limit 100 --min-score 80 --limit 5
 python3 contrib_radar.py --repo owner/repo --include-label "help wanted" --exclude-label blocked --unassigned-only
+
+# Focus a session on a domain and remove risky broad work before scoring.
+python3 contrib_radar.py --repo owner/repo \
+  --include-text agent \
+  --include-text cad \
+  --exclude-text "breaking change" \
+  --exclude-text migration
 ```
 
 The direct mode runs `gh issue list` with the same issue fields shown above, then
@@ -56,7 +63,10 @@ for every ranked issue.
 
 Use `--unassigned-only`, `--max-comments N`, and `--updated-within-days N` when
 you want a contribution session to skip already-owned, high-churn, or stale
-issues entirely, rather than merely penalizing them in the score.
+issues entirely, rather than merely penalizing them in the score. Use
+`--include-text` and `--exclude-text` to focus a session on domain terms or skip
+risky phrases before scoring; include terms are OR-ed, while exclude terms always
+win.
 
 Example output:
 
