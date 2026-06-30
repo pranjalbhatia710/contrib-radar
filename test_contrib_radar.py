@@ -11,6 +11,7 @@ from contrib_radar import (
     filter_issues_by_workflow,
     filter_ranked,
     load_issues_from_gh,
+    load_issues_from_repos,
     main,
     rank_issue,
     rank_issues,
@@ -305,6 +306,48 @@ class ContribRadarTests(unittest.TestCase):
             SystemExit, "gh issue list failed: not found"
         ):
             load_issues_from_gh("owner/repo", 10)
+
+    def test_load_issues_from_repos_fetches_each_repo_and_tags_source(self):
+        def fake_load(repo, issue_limit):
+            return [{"number": issue_limit, "title": f"Fix {repo}"}]
+
+        with patch("contrib_radar.load_issues_from_gh", side_effect=fake_load) as load:
+            issues = load_issues_from_repos(["owner/one", "owner/two"], 25)
+
+        self.assertEqual([call.args for call in load.call_args_list], [("owner/one", 25), ("owner/two", 25)])
+        self.assertEqual([issue["repository"] for issue in issues], ["owner/one", "owner/two"])
+
+    def test_load_issues_from_repos_preserves_existing_repository_field(self):
+        with patch(
+            "contrib_radar.load_issues_from_gh",
+            return_value=[{"number": 1, "repository": "api/source"}],
+        ):
+            issues = load_issues_from_repos(["owner/repo"], 10)
+
+        self.assertEqual(issues[0]["repository"], "api/source")
+
+    def test_load_issues_from_repos_names_failing_repo(self):
+        with patch("contrib_radar.load_issues_from_gh", side_effect=SystemExit("boom")):
+            with self.assertRaisesRegex(SystemExit, "owner/repo: boom"):
+                load_issues_from_repos(["owner/repo"], 10)
+
+    def test_load_issues_from_repos_rejects_blank_repo_values(self):
+        with self.assertRaisesRegex(SystemExit, "at least one non-empty --repo"):
+            load_issues_from_repos(["  "], 10)
+
+    def test_main_accepts_repeated_repo_flags(self):
+        def fake_load(repo, issue_limit):
+            return [{"number": 1 if repo.endswith("one") else 2, "title": f"Fix {repo}", "comments": 0}]
+
+        from io import StringIO
+
+        stdout = StringIO()
+        with patch("contrib_radar.load_issues_from_gh", side_effect=fake_load), patch("sys.stdout", stdout):
+            exit_code = main(["--format", "json", "--repo", "owner/one", "--repo", "owner/two"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual({issue["repository"] for issue in payload}, {"owner/one", "owner/two"})
 
     def test_main_rejects_repo_and_file_together(self):
         with self.assertRaisesRegex(SystemExit, "pass either --repo or a JSON file"):

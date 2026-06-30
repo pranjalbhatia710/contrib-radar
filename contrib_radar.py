@@ -57,6 +57,7 @@ class RankedIssue:
     number: int
     title: str
     url: str
+    repository: str
     labels: tuple[str, ...]
     reasons: tuple[str, ...]
 
@@ -143,6 +144,7 @@ def rank_issue(issue: dict[str, Any], now: datetime | None = None) -> RankedIssu
         number=int(issue.get("number") or 0),
         title=title,
         url=str(issue.get("url") or ""),
+        repository=str(issue.get("repository") or ""),
         labels=labels,
         reasons=tuple(reasons),
     )
@@ -274,6 +276,8 @@ def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
         lines.append(f"## {issue.score}/100 · #{issue.number} · {issue.title}")
         if issue.url:
             lines.append(f"URL: {issue.url}")
+        if issue.repository:
+            lines.append(f"Repo: {issue.repository}")
         lines.append(f"Labels: {labels}")
         lines.append(f"Why: {reasons}")
         lines.append("")
@@ -318,6 +322,31 @@ def load_issues_from_gh(repo: str, issue_limit: int) -> list[dict[str, Any]]:
     return data
 
 
+def load_issues_from_repos(repos: Iterable[str], issue_limit: int) -> list[dict[str, Any]]:
+    """Fetch open issues from one or more GitHub repositories.
+
+    Multi-repo scouting is intentionally a thin wrapper around the single-repo
+    loader so failures still name the repository that blocked the scan.
+    """
+    combined: list[dict[str, Any]] = []
+    saw_repo = False
+    for repo in repos:
+        repo = repo.strip()
+        if not repo:
+            continue
+        saw_repo = True
+        try:
+            issues = load_issues_from_gh(repo, issue_limit)
+        except SystemExit as exc:
+            raise SystemExit(f"{repo}: {exc}") from exc
+        for issue in issues:
+            issue.setdefault("repository", repo)
+        combined.extend(issues)
+    if not saw_repo:
+        raise SystemExit("at least one non-empty --repo value is required")
+    return combined
+
+
 def load_issues_from_file_or_stdin(path: str | None) -> list[dict[str, Any]]:
     raw = open(path, encoding="utf-8").read() if path else sys.stdin.read()
     data = json.loads(raw)
@@ -329,7 +358,12 @@ def load_issues_from_file_or_stdin(path: str | None) -> list[dict[str, Any]]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rank GitHub issues for credible OSS contributions.")
     parser.add_argument("file", nargs="?", help="JSON file from gh issue list. Defaults to stdin.")
-    parser.add_argument("--repo", help="GitHub repository to fetch directly with gh, for example owner/repo")
+    parser.add_argument(
+        "--repo",
+        action="append",
+        default=[],
+        help="GitHub repository to fetch directly with gh, for example owner/repo; repeat to scan multiple repos",
+    )
     parser.add_argument(
         "--issue-limit",
         type=int,
@@ -397,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.repo and args.file:
         raise SystemExit("pass either --repo or a JSON file, not both")
     data = (
-        load_issues_from_gh(args.repo, args.issue_limit)
+        load_issues_from_repos(args.repo, args.issue_limit)
         if args.repo
         else load_issues_from_file_or_stdin(args.file)
     )
