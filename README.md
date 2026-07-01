@@ -49,6 +49,9 @@ JSON file and fetch open issues directly:
 python3 contrib_radar.py --repo owner/repo --issue-limit 100 --min-score 80 --limit 5
 python3 contrib_radar.py --repo owner/repo --include-label "help wanted" --exclude-label blocked --unassigned-only
 
+# Include compact body previews when deciding whether to open full issues.
+python3 contrib_radar.py --repo owner/repo --min-score 80 --show-snippets
+
 # Scan a small shortlist of target projects in one ranked pass.
 python3 contrib_radar.py \
   --repo owner/agent-project \

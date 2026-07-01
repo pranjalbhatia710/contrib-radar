@@ -70,6 +70,25 @@ class ContribRadarTests(unittest.TestCase):
         self.assertIn("#3", output)
         self.assertIn("https://example.test/3", output)
 
+    def test_render_markdown_can_include_body_snippets(self):
+        ranked = [
+            rank_issue(
+                {
+                    "number": 4,
+                    "title": "Document install error",
+                    "body": "First line.\n\nSecond line with setup context.",
+                    "url": "https://example.test/4",
+                },
+                now=NOW,
+            )
+        ]
+
+        without_snippet = render_markdown(ranked, limit=1)
+        with_snippet = render_markdown(ranked, limit=1, show_snippets=True)
+
+        self.assertNotIn("Snippet:", without_snippet)
+        self.assertIn("Snippet: First line. Second line with setup context.", with_snippet)
+
     def test_render_json_outputs_machine_readable_scores(self):
         ranked = [rank_issue({"number": 3, "title": "Fix crash", "url": "https://example.test/3"}, now=NOW)]
         output = render_json(ranked, limit=1)

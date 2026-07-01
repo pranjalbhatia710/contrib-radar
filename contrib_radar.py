@@ -67,6 +67,7 @@ class RankedIssue:
     repository: str
     labels: tuple[str, ...]
     reasons: tuple[str, ...]
+    body_snippet: str
 
 
 def _parse_time(value: str | None) -> datetime | None:
@@ -98,6 +99,16 @@ def _comment_count(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _body_snippet(body: str, limit: int = 240) -> str:
+    """Return a compact one-line issue-body preview for terminal triage."""
+    compact = re.sub(r"\s+", " ", body).strip()
+    if not compact:
+        return ""
+    if len(compact) <= limit:
+        return compact
+    return compact[: max(0, limit - 1)].rstrip() + "…"
 
 
 def rank_issue(issue: dict[str, Any], now: datetime | None = None) -> RankedIssue:
@@ -166,6 +177,7 @@ def rank_issue(issue: dict[str, Any], now: datetime | None = None) -> RankedIssu
         repository=str(issue.get("repository") or ""),
         labels=labels,
         reasons=tuple(reasons),
+        body_snippet=_body_snippet(body),
     )
 
 
@@ -299,7 +311,7 @@ def expand_preset_terms(presets: Iterable[str], include_terms: Iterable[str] | N
     return expanded
 
 
-def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
+def render_markdown(ranked: list[RankedIssue], limit: int, *, show_snippets: bool = False) -> str:
     lines = ["# contrib-radar results", ""]
     for issue in ranked[:limit]:
         labels = ", ".join(issue.labels) if issue.labels else "none"
@@ -309,6 +321,8 @@ def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
             lines.append(f"URL: {issue.url}")
         if issue.repository:
             lines.append(f"Repo: {issue.repository}")
+        if show_snippets and issue.body_snippet:
+            lines.append(f"Snippet: {issue.body_snippet}")
         lines.append(f"Labels: {labels}")
         lines.append(f"Why: {reasons}")
         lines.append("")
@@ -501,6 +515,11 @@ def main(argv: list[str] | None = None) -> int:
         help="only print issues with this score or higher",
     )
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown", help="output format")
+    parser.add_argument(
+        "--show-snippets",
+        action="store_true",
+        help="include compact one-line issue body previews in markdown output",
+    )
     args = parser.parse_args(argv)
 
     if args.min_score is not None and not 0 <= args.min_score <= 100:
@@ -538,7 +557,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")
     else:
-        print(render_markdown(ranked, args.limit), end="")
+        print(render_markdown(ranked, args.limit, show_snippets=args.show_snippets), end="")
     return 0
 
 
