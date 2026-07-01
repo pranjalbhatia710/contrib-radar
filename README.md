@@ -64,6 +64,15 @@ python3 contrib_radar.py --repo owner/repo \
   --include-text cad \
   --exclude-text "breaking change" \
   --exclude-text migration
+
+# Use curated domain presets for common high-signal contribution areas.
+python3 contrib_radar.py \
+  --repo modelcontextprotocol/python-sdk \
+  --repo CadQuery/cadquery \
+  --preset ai-agents \
+  --preset cad \
+  --exclude-text migration \
+  --unassigned-only
 ```
 
 The direct mode runs `gh issue list` with the same issue fields shown above, then
@@ -75,7 +84,8 @@ you want a contribution session to skip already-owned, high-churn, or stale
 issues entirely, rather than merely penalizing them in the score. Use
 `--include-text` and `--exclude-text` to focus a session on domain terms or skip
 risky phrases before scoring; include terms are OR-ed, while exclude terms always
-win.
+win. Use `--preset` to add curated include terms for `ai-agents`, `cad`,
+`robotics`, `frontend`, or `devtools` without memorizing common project keywords.
 
 Example output:
 

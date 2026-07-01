@@ -47,6 +47,13 @@ LABEL_ALIASES = {
     "test": "tests",
     "testing": "tests",
 }
+DOMAIN_PRESETS = {
+    "ai-agents": ("agent", "mcp", "llm", "tool call", "prompt", "eval"),
+    "cad": ("cad", "geometry", "mesh", "step", "stl", "workplane"),
+    "robotics": ("robot", "robotics", "dataset", "teleop", "policy", "simulation"),
+    "frontend": ("frontend", "ui", "ux", "accessibility", "a11y", "component"),
+    "devtools": ("cli", "developer experience", "dx", "configuration", "install", "debug"),
+}
 BROAD_WORDS = re.compile(r"\b(epic|roadmap|architecture|rewrite|migration|tracking|umbrella|rfc)\b", re.I)
 CONCRETE_WORDS = re.compile(r"\b(fix|add|update|document|test|error|typo|crash|regression|missing)\b", re.I)
 GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,updatedAt,url"
@@ -81,6 +88,18 @@ def _label_names(labels: Iterable[Any]) -> tuple[str, ...]:
     return tuple(names)
 
 
+def _comment_count(value: Any) -> int:
+    """Return a comment count from gh's count or node-list representations."""
+    if value is None:
+        return 0
+    if isinstance(value, (list, tuple)):
+        return len(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def rank_issue(issue: dict[str, Any], now: datetime | None = None) -> RankedIssue:
     now = now or datetime.now(timezone.utc)
     labels = _label_names(issue.get("labels", []))
@@ -101,7 +120,7 @@ def rank_issue(issue: dict[str, Any], now: datetime | None = None) -> RankedIssu
             score += delta
             reasons.append(f"{delta} label:{original}")
 
-    comments = int(issue.get("comments") or 0)
+    comments = _comment_count(issue.get("comments"))
     if comments == 0:
         score += 8
         reasons.append("+8 no discussion churn")
@@ -212,7 +231,7 @@ def filter_issues_by_workflow(
     for issue in issues:
         if unassigned_only and issue.get("assignees"):
             continue
-        if max_comments is not None and int(issue.get("comments") or 0) > max_comments:
+        if max_comments is not None and _comment_count(issue.get("comments")) > max_comments:
             continue
         filtered.append(issue)
     return filtered
@@ -266,6 +285,18 @@ def filter_issues_by_text(
             continue
         filtered.append(issue)
     return filtered
+
+
+def expand_preset_terms(presets: Iterable[str], include_terms: Iterable[str] | None = None) -> list[str]:
+    """Return include-text terms with domain preset terms appended in CLI order."""
+    expanded = [term for term in include_terms or [] if term.strip()]
+    for preset in presets:
+        try:
+            expanded.extend(DOMAIN_PRESETS[preset])
+        except KeyError as exc:
+            choices = ", ".join(sorted(DOMAIN_PRESETS))
+            raise SystemExit(f"unknown --preset {preset!r}; choose one of: {choices}") from exc
+    return expanded
 
 
 def render_markdown(ranked: list[RankedIssue], limit: int) -> str:
@@ -407,6 +438,13 @@ def main(argv: list[str] | None = None) -> int:
         help="only consider issues whose title or body contains this text; repeat to accept any term",
     )
     parser.add_argument(
+        "--preset",
+        action="append",
+        default=[],
+        choices=sorted(DOMAIN_PRESETS),
+        help="append a curated include-text term set for a contribution domain; repeat to combine domains",
+    )
+    parser.add_argument(
         "--exclude-text",
         action="append",
         default=[],
@@ -446,7 +484,8 @@ def main(argv: list[str] | None = None) -> int:
         max_comments=args.max_comments,
     )
     data = filter_issues_by_activity(data, updated_within_days=args.updated_within_days)
-    data = filter_issues_by_text(data, include_terms=args.include_text, exclude_terms=args.exclude_text)
+    include_text = expand_preset_terms(args.preset, args.include_text)
+    data = filter_issues_by_text(data, include_terms=include_text, exclude_terms=args.exclude_text)
     ranked = filter_ranked(rank_issues(data), args.min_score)
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")

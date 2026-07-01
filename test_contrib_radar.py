@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from contrib_radar import (
+    expand_preset_terms,
     filter_issues_by_activity,
     filter_issues_by_label,
     filter_issues_by_text,
@@ -137,6 +138,23 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
 
+    def test_filter_issues_by_workflow_accepts_gh_comment_nodes(self):
+        issues = [
+            {"number": 1, "comments": [{"body": "one"}, {"body": "two"}], "assignees": []},
+            {"number": 2, "comments": [{"body": "one"}, {"body": "two"}, {"body": "three"}], "assignees": []},
+        ]
+
+        filtered = filter_issues_by_workflow(issues, max_comments=2)
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
+    def test_rank_issue_counts_gh_comment_nodes(self):
+        issue = {"number": 1, "title": "Fix crash", "comments": [{"body": "one"}, {"body": "two"}]}
+
+        ranked = rank_issue(issue, now=NOW)
+
+        self.assertTrue(any("small discussion" in reason for reason in ranked.reasons))
+
     def test_filter_issues_by_activity_skips_stale_and_missing_timestamps(self):
         issues = [
             {"number": 1, "updatedAt": "2026-06-01T00:00:00Z"},
@@ -172,6 +190,33 @@ class ContribRadarTests(unittest.TestCase):
         )
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
+
+    def test_expand_preset_terms_appends_domain_terms(self):
+        terms = expand_preset_terms(["cad", "ai-agents"], ["docs"])
+
+        self.assertEqual(terms[0], "docs")
+        self.assertIn("workplane", terms)
+        self.assertIn("mcp", terms)
+
+    def test_expand_preset_terms_rejects_unknown_presets(self):
+        with self.assertRaisesRegex(SystemExit, "unknown --preset"):
+            expand_preset_terms(["unknown-domain"])
+
+    def test_main_applies_preset_terms_before_scoring(self):
+        issues = [
+            {"number": 1, "title": "Fix Workplane export", "body": "Small CAD issue."},
+            {"number": 2, "title": "Fix billing chart", "body": "Small failure."},
+        ]
+
+        from io import StringIO
+
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main(["--format", "json", "--preset", "cad"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [1])
 
     def test_main_rejects_invalid_min_score(self):
         with self.assertRaisesRegex(SystemExit, "--min-score must be between 0 and 100"):
