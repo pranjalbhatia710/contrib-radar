@@ -353,7 +353,12 @@ def load_issues_from_gh(repo: str, issue_limit: int) -> list[dict[str, Any]]:
     return data
 
 
-def load_issues_from_repos(repos: Iterable[str], issue_limit: int) -> list[dict[str, Any]]:
+def load_issues_from_repos(
+    repos: Iterable[str],
+    issue_limit: int,
+    *,
+    skip_fetch_errors: bool = False,
+) -> list[dict[str, Any]]:
     """Fetch open issues from one or more GitHub repositories.
 
     Multi-repo scouting is intentionally a thin wrapper around the single-repo
@@ -369,12 +374,17 @@ def load_issues_from_repos(repos: Iterable[str], issue_limit: int) -> list[dict[
         try:
             issues = load_issues_from_gh(repo, issue_limit)
         except SystemExit as exc:
-            raise SystemExit(f"{repo}: {exc}") from exc
+            if not skip_fetch_errors:
+                raise SystemExit(f"{repo}: {exc}") from exc
+            print(f"warning: skipped {repo}: {exc}", file=sys.stderr)
+            continue
         for issue in issues:
             issue.setdefault("repository", repo)
         combined.extend(issues)
     if not saw_repo:
         raise SystemExit("at least one non-empty --repo value is required")
+    if skip_fetch_errors and not combined:
+        raise SystemExit("all repository fetches failed or returned no issues")
     return combined
 
 
@@ -429,6 +439,11 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=100,
         help="number of open issues to fetch when --repo is used",
+    )
+    parser.add_argument(
+        "--skip-fetch-errors",
+        action="store_true",
+        help="when scanning multiple repos, warn and continue if one repository cannot be fetched",
     )
     parser.add_argument("--limit", type=int, default=10, help="number of issues to print")
     parser.add_argument(
@@ -502,7 +517,7 @@ def main(argv: list[str] | None = None) -> int:
     if repos and args.file:
         raise SystemExit("pass either --repo/--repo-file or a JSON file, not both")
     data = (
-        load_issues_from_repos(repos, args.issue_limit)
+        load_issues_from_repos(repos, args.issue_limit, skip_fetch_errors=args.skip_fetch_errors)
         if repos
         else load_issues_from_file_or_stdin(args.file)
     )

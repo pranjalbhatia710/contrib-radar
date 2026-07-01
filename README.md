@@ -77,6 +77,13 @@ python3 contrib_radar.py \
   --preset cad \
   --exclude-text migration \
   --unassigned-only
+
+# Keep a multi-repo scan useful when one target is private, renamed, or rate-limited.
+python3 contrib_radar.py \
+  --repo modelcontextprotocol/python-sdk \
+  --repo owner/maybe-renamed \
+  --skip-fetch-errors \
+  --unassigned-only
 ```
 
 The direct mode runs `gh issue list` with the same issue fields shown above, then

@@ -378,6 +378,26 @@ class ContribRadarTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "owner/repo: boom"):
                 load_issues_from_repos(["owner/repo"], 10)
 
+    def test_load_issues_from_repos_can_skip_fetch_errors(self):
+        def fake_load(repo, issue_limit):
+            if repo == "owner/broken":
+                raise SystemExit("not found")
+            return [{"number": issue_limit, "title": f"Fix {repo}"}]
+
+        from io import StringIO
+
+        stderr = StringIO()
+        with patch("contrib_radar.load_issues_from_gh", side_effect=fake_load), patch("sys.stderr", stderr):
+            issues = load_issues_from_repos(["owner/broken", "owner/good"], 10, skip_fetch_errors=True)
+
+        self.assertEqual([issue["repository"] for issue in issues], ["owner/good"])
+        self.assertIn("warning: skipped owner/broken: not found", stderr.getvalue())
+
+    def test_load_issues_from_repos_errors_when_all_skipped(self):
+        with patch("contrib_radar.load_issues_from_gh", side_effect=SystemExit("boom")):
+            with self.assertRaisesRegex(SystemExit, "all repository fetches failed"):
+                load_issues_from_repos(["owner/broken"], 10, skip_fetch_errors=True)
+
     def test_load_issues_from_repos_rejects_blank_repo_values(self):
         with self.assertRaisesRegex(SystemExit, "at least one non-empty --repo"):
             load_issues_from_repos(["  "], 10)
@@ -412,6 +432,36 @@ class ContribRadarTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())
         self.assertEqual({issue["repository"] for issue in payload}, {"owner/one", "owner/two"})
+
+    def test_main_can_skip_repo_fetch_errors(self):
+        def fake_load(repo, issue_limit):
+            if repo.endswith("broken"):
+                raise SystemExit("rate limited")
+            return [{"number": 2, "title": "Fix good repo", "comments": 0}]
+
+        from io import StringIO
+
+        stdout = StringIO()
+        stderr = StringIO()
+        with patch("contrib_radar.load_issues_from_gh", side_effect=fake_load), patch("sys.stdout", stdout), patch(
+            "sys.stderr", stderr
+        ):
+            exit_code = main(
+                [
+                    "--format",
+                    "json",
+                    "--skip-fetch-errors",
+                    "--repo",
+                    "owner/broken",
+                    "--repo",
+                    "owner/good",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["repository"] for issue in payload], ["owner/good"])
+        self.assertIn("warning: skipped owner/broken: rate limited", stderr.getvalue())
 
     def test_main_accepts_repo_file_targets(self):
         def fake_load(repo, issue_limit):
