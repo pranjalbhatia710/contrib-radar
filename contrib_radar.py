@@ -378,6 +378,29 @@ def load_issues_from_repos(repos: Iterable[str], issue_limit: int) -> list[dict[
     return combined
 
 
+def load_repos_from_file(path: str) -> list[str]:
+    """Load newline-delimited repositories, ignoring blank lines and comments."""
+    repos: list[str] = []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line_number, raw_line in enumerate(handle, start=1):
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "#" in line:
+                    line = line.split("#", 1)[0].strip()
+                if not line:
+                    continue
+                if "/" not in line:
+                    raise SystemExit(f"{path}:{line_number}: expected owner/repo, got {line!r}")
+                repos.append(line)
+    except OSError as exc:
+        raise SystemExit(f"could not read --repo-file {path!r}: {exc.strerror}") from exc
+    if not repos:
+        raise SystemExit(f"--repo-file {path!r} did not contain any repositories")
+    return repos
+
+
 def load_issues_from_file_or_stdin(path: str | None) -> list[dict[str, Any]]:
     raw = open(path, encoding="utf-8").read() if path else sys.stdin.read()
     data = json.loads(raw)
@@ -394,6 +417,12 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=[],
         help="GitHub repository to fetch directly with gh, for example owner/repo; repeat to scan multiple repos",
+    )
+    parser.add_argument(
+        "--repo-file",
+        action="append",
+        default=[],
+        help="newline-delimited owner/repo file to scan; blank lines and # comments are ignored",
     )
     parser.add_argument(
         "--issue-limit",
@@ -466,11 +495,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.updated_within_days is not None and args.updated_within_days < 0:
         raise SystemExit("--updated-within-days must be zero or greater")
 
-    if args.repo and args.file:
-        raise SystemExit("pass either --repo or a JSON file, not both")
+    repos = list(args.repo)
+    for repo_file in args.repo_file:
+        repos.extend(load_repos_from_file(repo_file))
+
+    if repos and args.file:
+        raise SystemExit("pass either --repo/--repo-file or a JSON file, not both")
     data = (
-        load_issues_from_repos(args.repo, args.issue_limit)
-        if args.repo
+        load_issues_from_repos(repos, args.issue_limit)
+        if repos
         else load_issues_from_file_or_stdin(args.file)
     )
     data = filter_issues_by_label(

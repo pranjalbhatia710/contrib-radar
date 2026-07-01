@@ -1,5 +1,6 @@
 import json
 import subprocess
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -13,6 +14,7 @@ from contrib_radar import (
     filter_ranked,
     load_issues_from_gh,
     load_issues_from_repos,
+    load_repos_from_file,
     main,
     rank_issue,
     rank_issues,
@@ -380,6 +382,23 @@ class ContribRadarTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "at least one non-empty --repo"):
             load_issues_from_repos(["  "], 10)
 
+    def test_load_repos_from_file_ignores_comments_and_blank_lines(self):
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8") as handle:
+            handle.write("# daily targets\n\nowner/one\nowner/two  # inline note\n")
+            handle.flush()
+
+            repos = load_repos_from_file(handle.name)
+
+        self.assertEqual(repos, ["owner/one", "owner/two"])
+
+    def test_load_repos_from_file_rejects_invalid_entries(self):
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8") as handle:
+            handle.write("owner-only\n")
+            handle.flush()
+
+            with self.assertRaisesRegex(SystemExit, "expected owner/repo"):
+                load_repos_from_file(handle.name)
+
     def test_main_accepts_repeated_repo_flags(self):
         def fake_load(repo, issue_limit):
             return [{"number": 1 if repo.endswith("one") else 2, "title": f"Fix {repo}", "comments": 0}]
@@ -394,8 +413,25 @@ class ContribRadarTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual({issue["repository"] for issue in payload}, {"owner/one", "owner/two"})
 
+    def test_main_accepts_repo_file_targets(self):
+        def fake_load(repo, issue_limit):
+            return [{"number": 1 if repo.endswith("one") else 2, "title": f"Fix {repo}", "comments": 0}]
+
+        from io import StringIO
+
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8") as handle:
+            handle.write("owner/one\nowner/two\n")
+            handle.flush()
+            stdout = StringIO()
+            with patch("contrib_radar.load_issues_from_gh", side_effect=fake_load), patch("sys.stdout", stdout):
+                exit_code = main(["--format", "json", "--repo-file", handle.name])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual({issue["repository"] for issue in payload}, {"owner/one", "owner/two"})
+
     def test_main_rejects_repo_and_file_together(self):
-        with self.assertRaisesRegex(SystemExit, "pass either --repo or a JSON file"):
+        with self.assertRaisesRegex(SystemExit, "pass either --repo/--repo-file or a JSON file"):
             main(["issues.json", "--repo", "owner/repo"])
 
 

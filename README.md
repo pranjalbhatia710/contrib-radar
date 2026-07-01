@@ -58,6 +58,10 @@ python3 contrib_radar.py \
   --unassigned-only \
   --max-comments 3
 
+# Keep recurring scouting targets in a file for daily contribution sessions.
+printf "modelcontextprotocol/python-sdk\nCadQuery/cadquery\nhuggingface/lerobot\n" > targets.txt
+python3 contrib_radar.py --repo-file targets.txt --preset ai-agents --preset robotics
+
 # Focus a session on a domain and remove risky broad work before scoring.
 python3 contrib_radar.py --repo owner/repo \
   --include-text agent \
@@ -77,7 +81,9 @@ python3 contrib_radar.py \
 
 The direct mode runs `gh issue list` with the same issue fields shown above, then
 applies the local scoring model. It still prints the transparent reason string
-for every ranked issue.
+for every ranked issue. Use repeated `--repo` flags for a one-off shortlist, or
+`--repo-file targets.txt` for newline-delimited recurring target lists; blank
+lines and `#` comments are ignored.
 
 Use `--unassigned-only`, `--max-comments N`, and `--updated-within-days N` when
 you want a contribution session to skip already-owned, high-churn, or stale
