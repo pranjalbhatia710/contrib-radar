@@ -71,12 +71,22 @@ class RankedIssue:
 
 
 def _parse_time(value: str | None) -> datetime | None:
+    """Parse a GitHub-style timestamp and normalize it to timezone-aware UTC.
+
+    GitHub's API returns offset-aware timestamps such as
+    ``2026-06-01T00:00:00Z``, but imported issue exports often contain naive ISO
+    strings. Treat those as UTC so activity filters and scoring do not crash when
+    subtracting from an aware ``now`` value.
+    """
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _label_names(labels: Iterable[Any]) -> tuple[str, ...]:

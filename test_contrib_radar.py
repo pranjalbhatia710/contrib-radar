@@ -187,6 +187,23 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
 
+    def test_activity_filter_accepts_naive_imported_timestamps(self):
+        issues = [
+            {"number": 1, "updatedAt": "2026-06-01T00:00:00"},
+            {"number": 2, "updated_at": "2026-05-01T00:00:00"},
+        ]
+
+        filtered = filter_issues_by_activity(issues, updated_within_days=14, now=NOW)
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
+    def test_rank_issue_accepts_naive_imported_timestamp(self):
+        issue = {"number": 1, "title": "Fix crash", "updatedAt": "2026-06-01T00:00:00"}
+
+        ranked = rank_issue(issue, now=NOW)
+
+        self.assertTrue(any("recently active" in reason for reason in ranked.reasons))
+
     def test_filter_issues_by_text_includes_title_or_body_matches(self):
         issues = [
             {"number": 1, "title": "Fix CAD export", "body": ""},
