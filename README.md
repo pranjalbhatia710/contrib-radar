@@ -95,6 +95,14 @@ python3 contrib_radar.py \
   --repo huggingface/lerobot \
   --per-repo-limit 2 \
   --limit 6
+
+# Export a ranked shortlist for spreadsheet review or a daily scouting log.
+python3 contrib_radar.py \
+  --repo modelcontextprotocol/python-sdk \
+  --repo CadQuery/cadquery \
+  --format csv \
+  --show-snippets \
+  --limit 20 > contrib-shortlist.csv
 ```
 
 The direct mode runs `gh issue list` with the same issue fields shown above, then
@@ -111,7 +119,10 @@ risky phrases before scoring; include terms are OR-ed, while exclude terms alway
 win. Use `--preset` to add curated include terms for `ai-agents`, `cad`,
 `robotics`, `frontend`, or `devtools` without memorizing common project keywords.
 Use `--per-repo-limit N` after scoring to keep multi-repo scans balanced instead
-of letting the busiest repository fill the whole shortlist.
+of letting the busiest repository fill the whole shortlist. Use
+`--format markdown`, `--format json`, or `--format csv` depending on whether you
+want a readable terminal report, machine-readable output, or spreadsheet-friendly
+daily scouting log.
 
 Example output:
 

@@ -19,6 +19,7 @@ from contrib_radar import (
     main,
     rank_issue,
     rank_issues,
+    render_csv,
     render_json,
     render_markdown,
 )
@@ -95,6 +96,29 @@ class ContribRadarTests(unittest.TestCase):
         output = render_json(ranked, limit=1)
         self.assertIn('"score"', output)
         self.assertIn('"number": 3', output)
+
+    def test_render_csv_outputs_spreadsheet_friendly_rows(self):
+        ranked = [
+            rank_issue(
+                {
+                    "number": 3,
+                    "title": "Fix crash, then document it",
+                    "url": "https://example.test/3",
+                    "repository": "owner/repo",
+                    "labels": [{"name": "bug"}, {"name": "help wanted"}],
+                    "body": "Reproducer and expected behavior.",
+                },
+                now=NOW,
+            )
+        ]
+
+        output = render_csv(ranked, limit=1, show_snippets=True)
+
+        self.assertIn("score,number,title,url,repository,labels,reasons,body_snippet", output)
+        self.assertIn('"Fix crash, then document it"', output)
+        self.assertIn("owner/repo", output)
+        self.assertIn("bug; help wanted", output)
+        self.assertIn("Reproducer and expected behavior.", output)
 
     def test_filter_ranked_applies_minimum_score(self):
         ranked = [
@@ -307,6 +331,21 @@ class ContribRadarTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())
         self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_main_can_render_csv_output(self):
+        issues = [
+            {"number": 1, "title": "Fix crash", "url": "https://example.test/1", "comments": 0},
+        ]
+
+        from io import StringIO
+
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main(["--format", "csv"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(stdout.getvalue().startswith("score,number,title,url,repository,labels,reasons\r\n"))
+        self.assertIn("Fix crash", stdout.getvalue())
 
     def test_main_caps_json_output_per_repo(self):
         issues = [

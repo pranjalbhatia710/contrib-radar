@@ -8,11 +8,13 @@ so contributors can pick work that is small, useful, recent, and likely reviewab
 from __future__ import annotations
 
 import argparse
+import csv
 import dataclasses
 import json
 import re
 import subprocess
 import sys
+from io import StringIO
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
@@ -365,6 +367,38 @@ def render_json(ranked: list[RankedIssue], limit: int) -> str:
     return json.dumps(payload, indent=2) + "\n"
 
 
+def render_csv(ranked: list[RankedIssue], limit: int, *, show_snippets: bool = False) -> str:
+    """Return ranked issues as CSV for spreadsheets and daily scouting logs."""
+    output = StringIO(newline="")
+    fieldnames = [
+        "score",
+        "number",
+        "title",
+        "url",
+        "repository",
+        "labels",
+        "reasons",
+    ]
+    if show_snippets:
+        fieldnames.append("body_snippet")
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for issue in ranked[:limit]:
+        row = {
+            "score": issue.score,
+            "number": issue.number,
+            "title": issue.title,
+            "url": issue.url,
+            "repository": issue.repository,
+            "labels": "; ".join(issue.labels),
+            "reasons": "; ".join(issue.reasons),
+        }
+        if show_snippets:
+            row["body_snippet"] = issue.body_snippet
+        writer.writerow(row)
+    return output.getvalue()
+
+
 def load_issues_from_gh(repo: str, issue_limit: int) -> list[dict[str, Any]]:
     """Fetch open issues from GitHub using the installed gh CLI."""
     if issue_limit < 1:
@@ -551,7 +585,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="cap output candidates per repository after scoring, useful for balanced multi-repo scans",
     )
-    parser.add_argument("--format", choices=("markdown", "json"), default="markdown", help="output format")
+    parser.add_argument("--format", choices=("markdown", "json", "csv"), default="markdown", help="output format")
     parser.add_argument(
         "--show-snippets",
         action="store_true",
@@ -595,6 +629,8 @@ def main(argv: list[str] | None = None) -> int:
     ranked = limit_ranked_per_repo(filter_ranked(rank_issues(data), args.min_score), args.per_repo_limit)
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")
+    elif args.format == "csv":
+        print(render_csv(ranked, args.limit, show_snippets=args.show_snippets), end="")
     else:
         print(render_markdown(ranked, args.limit, show_snippets=args.show_snippets), end="")
     return 0
