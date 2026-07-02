@@ -87,6 +87,14 @@ python3 contrib_radar.py \
   --repo owner/maybe-renamed \
   --skip-fetch-errors \
   --unassigned-only
+
+# Keep one large repo from dominating a multi-project shortlist.
+python3 contrib_radar.py \
+  --repo modelcontextprotocol/python-sdk \
+  --repo CadQuery/cadquery \
+  --repo huggingface/lerobot \
+  --per-repo-limit 2 \
+  --limit 6
 ```
 
 The direct mode runs `gh issue list` with the same issue fields shown above, then
@@ -102,6 +110,8 @@ issues entirely, rather than merely penalizing them in the score. Use
 risky phrases before scoring; include terms are OR-ed, while exclude terms always
 win. Use `--preset` to add curated include terms for `ai-agents`, `cad`,
 `robotics`, `frontend`, or `devtools` without memorizing common project keywords.
+Use `--per-repo-limit N` after scoring to keep multi-repo scans balanced instead
+of letting the busiest repository fill the whole shortlist.
 
 Example output:
 

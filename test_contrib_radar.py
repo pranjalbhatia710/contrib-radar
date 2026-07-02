@@ -12,6 +12,7 @@ from contrib_radar import (
     filter_issues_by_text,
     filter_issues_by_workflow,
     filter_ranked,
+    limit_ranked_per_repo,
     load_issues_from_gh,
     load_issues_from_repos,
     load_repos_from_file,
@@ -107,6 +108,26 @@ class ContribRadarTests(unittest.TestCase):
         filtered = filter_ranked(ranked, min_score=80)
 
         self.assertEqual([issue.number for issue in filtered], [1])
+
+    def test_limit_ranked_per_repo_keeps_balanced_global_order(self):
+        ranked = [
+            rank_issue({"number": 1, "title": "Fix crash", "repository": "owner/one"}, now=NOW),
+            rank_issue({"number": 2, "title": "Fix docs", "repository": "owner/one"}, now=NOW),
+            rank_issue({"number": 3, "title": "Fix test", "repository": "owner/two"}, now=NOW),
+            rank_issue({"number": 4, "title": "Fix install", "repository": "owner/two"}, now=NOW),
+        ]
+
+        limited = limit_ranked_per_repo(ranked, per_repo_limit=1)
+
+        self.assertEqual(
+            [(issue.repository, issue.number) for issue in limited],
+            [("owner/one", 1), ("owner/two", 3)],
+        )
+
+    def test_limit_ranked_per_repo_noop_without_limit(self):
+        ranked = [rank_issue({"number": 1, "title": "Fix crash", "repository": "owner/one"}, now=NOW)]
+
+        self.assertEqual(limit_ranked_per_repo(ranked), ranked)
 
     def test_filter_issues_by_label_includes_any_requested_label(self):
         issues = [
@@ -268,6 +289,10 @@ class ContribRadarTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "--updated-within-days must be zero or greater"):
             main(["--updated-within-days", "-1"])
 
+    def test_main_rejects_invalid_per_repo_limit(self):
+        with self.assertRaisesRegex(SystemExit, "--per-repo-limit must be at least 1"):
+            main(["--per-repo-limit", "0"])
+
     def test_main_filters_json_output_by_min_score(self):
         issues = [
             {"number": 1, "title": "Fix crash", "labels": [{"name": "good first issue"}, {"name": "bug"}], "comments": 0},
@@ -282,6 +307,25 @@ class ContribRadarTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())
         self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_main_caps_json_output_per_repo(self):
+        issues = [
+            {"number": 1, "title": "Fix crash", "repository": "owner/one", "comments": 0},
+            {"number": 2, "title": "Fix docs", "repository": "owner/one", "comments": 0},
+            {"number": 3, "title": "Fix test", "repository": "owner/two", "comments": 0},
+        ]
+
+        from io import StringIO
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main(["--format", "json", "--per-repo-limit", "1"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(
+            [(issue["repository"], issue["number"]) for issue in payload],
+            [("owner/one", 1), ("owner/two", 3)],
+        )
 
     def test_main_applies_label_filters_before_scoring(self):
         issues = [

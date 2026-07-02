@@ -203,6 +203,27 @@ def filter_ranked(ranked: Iterable[RankedIssue], min_score: int | None = None) -
     return [issue for issue in ranked if issue.score >= min_score]
 
 
+def limit_ranked_per_repo(ranked: Iterable[RankedIssue], per_repo_limit: int | None = None) -> list[RankedIssue]:
+    """Cap ranked output per repository while preserving global rank order.
+
+    Multi-repo scans can otherwise be dominated by one busy project. Empty
+    repository names share the same bucket, which keeps imported JSON without a
+    source repository deterministic.
+    """
+    if per_repo_limit is None:
+        return list(ranked)
+    seen: dict[str, int] = {}
+    limited: list[RankedIssue] = []
+    for issue in ranked:
+        repository = issue.repository
+        count = seen.get(repository, 0)
+        if count >= per_repo_limit:
+            continue
+        seen[repository] = count + 1
+        limited.append(issue)
+    return limited
+
+
 def _canonical_label(label: str) -> str:
     normalized = re.sub(r"\s+", " ", label.strip().lower())
     return LABEL_ALIASES.get(normalized, normalized)
@@ -524,6 +545,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="only print issues with this score or higher",
     )
+    parser.add_argument(
+        "--per-repo-limit",
+        type=int,
+        default=None,
+        help="cap output candidates per repository after scoring, useful for balanced multi-repo scans",
+    )
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown", help="output format")
     parser.add_argument(
         "--show-snippets",
@@ -538,6 +565,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--max-comments must be zero or greater")
     if args.updated_within_days is not None and args.updated_within_days < 0:
         raise SystemExit("--updated-within-days must be zero or greater")
+    if args.per_repo_limit is not None and args.per_repo_limit < 1:
+        raise SystemExit("--per-repo-limit must be at least 1")
 
     repos = list(args.repo)
     for repo_file in args.repo_file:
@@ -563,7 +592,7 @@ def main(argv: list[str] | None = None) -> int:
     data = filter_issues_by_activity(data, updated_within_days=args.updated_within_days)
     include_text = expand_preset_terms(args.preset, args.include_text)
     data = filter_issues_by_text(data, include_terms=include_text, exclude_terms=args.exclude_text)
-    ranked = filter_ranked(rank_issues(data), args.min_score)
+    ranked = limit_ranked_per_repo(filter_ranked(rank_issues(data), args.min_score), args.per_repo_limit)
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")
     else:
