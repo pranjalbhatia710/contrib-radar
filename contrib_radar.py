@@ -240,20 +240,27 @@ def filter_issues_by_label(
     *,
     include_labels: Iterable[str] | None = None,
     exclude_labels: Iterable[str] | None = None,
+    require_all_include_labels: bool = False,
 ) -> list[dict[str, Any]]:
     """Filter raw issues before ranking using case-insensitive label names.
 
     Include filters are OR-ed: an issue passes when it has at least one requested
-    label. Exclude filters always win, which lets contributors avoid queues such
-    as `blocked` or `needs reproduction` even when they also carry positive tags.
+    label. Set ``require_all_include_labels`` when a session needs intersections
+    such as ``bug`` + ``help wanted`` instead of the default union. Exclude
+    filters always win, which lets contributors avoid queues such as `blocked`
+    or `needs reproduction` even when they also carry positive tags.
     """
     include = _normalize_label_filters(include_labels)
     exclude = _normalize_label_filters(exclude_labels)
     filtered: list[dict[str, Any]] = []
     for issue in issues:
         labels = {_canonical_label(label) for label in _label_names(issue.get("labels", []))}
-        if include and labels.isdisjoint(include):
-            continue
+        if include:
+            if require_all_include_labels:
+                if not include.issubset(labels):
+                    continue
+            elif labels.isdisjoint(include):
+                continue
         if exclude and not labels.isdisjoint(exclude):
             continue
         filtered.append(issue)
@@ -538,6 +545,11 @@ def main(argv: list[str] | None = None) -> int:
         help="skip issues with this label before scoring; repeat for multiple labels",
     )
     parser.add_argument(
+        "--require-all-labels",
+        action="store_true",
+        help="require every --include-label to be present instead of accepting any included label",
+    )
+    parser.add_argument(
         "--unassigned-only",
         action="store_true",
         help="skip issues that already have assignees before scoring",
@@ -617,6 +629,7 @@ def main(argv: list[str] | None = None) -> int:
         data,
         include_labels=args.include_label,
         exclude_labels=args.exclude_label,
+        require_all_include_labels=args.require_all_labels,
     )
     data = filter_issues_by_workflow(
         data,

@@ -179,6 +179,22 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual([issue["number"] for issue in filtered], [1, 2, 3])
 
+    def test_filter_issues_by_label_can_require_all_included_labels(self):
+        issues = [
+            {"number": 1, "labels": [{"name": "bug"}, {"name": "help wanted"}]},
+            {"number": 2, "labels": [{"name": "bug"}]},
+            {"number": 3, "labels": [{"name": "help wanted"}]},
+            {"number": 4, "labels": [{"name": "Bug"}, {"name": "help-wanted"}]},
+        ]
+
+        filtered = filter_issues_by_label(
+            issues,
+            include_labels=["bug", "help wanted"],
+            require_all_include_labels=True,
+        )
+
+        self.assertEqual([issue["number"] for issue in filtered], [1, 4])
+
     def test_filter_issues_by_label_exclude_wins_over_include(self):
         issues = [
             {"number": 1, "labels": [{"name": "good first issue"}]},
@@ -381,6 +397,30 @@ class ContribRadarTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())
         self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_main_can_require_all_include_labels(self):
+        issues = [
+            {"number": 1, "title": "Fix crash", "labels": [{"name": "bug"}], "comments": 0},
+            {"number": 2, "title": "Fix wanted crash", "labels": [{"name": "bug"}, {"name": "help wanted"}], "comments": 0},
+            {"number": 3, "title": "Improve help wanted docs", "labels": [{"name": "help-wanted"}], "comments": 0},
+        ]
+
+        from io import StringIO
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main([
+                "--format",
+                "json",
+                "--include-label",
+                "bug",
+                "--include-label",
+                "help wanted",
+                "--require-all-labels",
+            ])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [2])
 
     def test_main_applies_workflow_filters_before_scoring(self):
         issues = [

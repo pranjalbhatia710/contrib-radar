@@ -40,6 +40,13 @@ python3 contrib_radar.py issues.json \
   --max-comments 3 \
   --updated-within-days 30 \
   --min-score 80
+
+# Require an issue to have every included label when you want an intersection
+# such as bug + help wanted, not the default union of accepted labels.
+python3 contrib_radar.py issues.json \
+  --include-label bug \
+  --include-label "help wanted" \
+  --require-all-labels
 ```
 
 If you already have the GitHub CLI authenticated, you can skip the intermediate
@@ -113,7 +120,9 @@ lines and `#` comments are ignored.
 
 Use `--unassigned-only`, `--max-comments N`, and `--updated-within-days N` when
 you want a contribution session to skip already-owned, high-churn, or stale
-issues entirely, rather than merely penalizing them in the score. Use
+issues entirely, rather than merely penalizing them in the score. Repeated
+`--include-label` flags are treated as a union by default; add
+`--require-all-labels` when a scan should require every included label. Use
 `--include-text` and `--exclude-text` to focus a session on domain terms or skip
 risky phrases before scoring; include terms are OR-ed, while exclude terms always
 win. Use `--preset` to add curated include terms for `ai-agents`, `cad`,
