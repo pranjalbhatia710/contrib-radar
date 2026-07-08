@@ -43,6 +43,22 @@ class ContribRadarTests(unittest.TestCase):
         self.assertIn("good first issue", ranked.labels)
         self.assertTrue(any("concrete" in reason for reason in ranked.reasons))
 
+    def test_rank_issue_scores_label_aliases(self):
+        issue = {
+            "number": 8,
+            "title": "Document setup error",
+            "body": "Add missing setup troubleshooting docs.",
+            "labels": [{"name": "help-wanted"}, {"name": "doc"}],
+            "comments": 0,
+            "updatedAt": "2026-06-01T00:00:00Z",
+        }
+
+        ranked = rank_issue(issue, now=NOW)
+
+        self.assertGreaterEqual(ranked.score, 90)
+        self.assertIn("+14 label:help-wanted", ranked.reasons)
+        self.assertIn("+8 label:doc", ranked.reasons)
+
     def test_assigned_broad_stale_issue_is_penalized(self):
         issue = {
             "number": 10,

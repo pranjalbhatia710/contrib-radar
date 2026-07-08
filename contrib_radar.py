@@ -134,12 +134,13 @@ def rank_issue(issue: dict[str, Any], now: datetime | None = None) -> RankedIssu
     reasons: list[str] = []
 
     for label_lower, original in label_key.items():
-        if label_lower in POSITIVE_LABELS:
-            delta = POSITIVE_LABELS[label_lower]
+        label_score_key = _canonical_label(label_lower)
+        if label_score_key in POSITIVE_LABELS:
+            delta = POSITIVE_LABELS[label_score_key]
             score += delta
             reasons.append(f"+{delta} label:{original}")
-        if label_lower in NEGATIVE_LABELS:
-            delta = NEGATIVE_LABELS[label_lower]
+        if label_score_key in NEGATIVE_LABELS:
+            delta = NEGATIVE_LABELS[label_score_key]
             score += delta
             reasons.append(f"{delta} label:{original}")
 
