@@ -228,7 +228,15 @@ def limit_ranked_per_repo(ranked: Iterable[RankedIssue], per_repo_limit: int | N
 
 
 def _canonical_label(label: str) -> str:
-    normalized = re.sub(r"\s+", " ", label.strip().lower())
+    """Normalize GitHub label spelling for filters and scoring.
+
+    Repositories vary between space, hyphen, and underscore spellings for the
+    same workflow labels (for example ``help wanted``, ``help-wanted``, and
+    ``help_wanted``). Treat those separators as equivalent so a contributor's
+    include/exclude filter keeps working across projects.
+    """
+    normalized = re.sub(r"[-_]+", " ", label.strip().lower())
+    normalized = re.sub(r"\s+", " ", normalized)
     return LABEL_ALIASES.get(normalized, normalized)
 
 

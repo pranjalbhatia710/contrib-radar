@@ -122,7 +122,10 @@ Use `--unassigned-only`, `--max-comments N`, and `--updated-within-days N` when
 you want a contribution session to skip already-owned, high-churn, or stale
 issues entirely, rather than merely penalizing them in the score. Repeated
 `--include-label` flags are treated as a union by default; add
-`--require-all-labels` when a scan should require every included label. Use
+`--require-all-labels` when a scan should require every included label. Label
+matching is case-insensitive and treats spaces, hyphens, and underscores as
+equivalent, so filters such as `--exclude-label "needs reproduction"` also catch
+`needs-reproduction` and `needs_reproduction`. Use
 `--include-text` and `--exclude-text` to focus a session on domain terms or skip
 risky phrases before scoring; include terms are OR-ed, while exclude terms always
 win. Use `--preset` to add curated include terms for `ai-agents`, `cad`,

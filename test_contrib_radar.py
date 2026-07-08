@@ -184,7 +184,7 @@ class ContribRadarTests(unittest.TestCase):
         issues = [
             {"number": 1, "labels": [{"name": "documentation"}]},
             {"number": 2, "labels": [{"name": "good-first-issue"}]},
-            {"number": 3, "labels": [{"name": "help wanted"}]},
+            {"number": 3, "labels": [{"name": "help_wanted"}]},
             {"number": 4, "labels": [{"name": "bug"}]},
         ]
 
@@ -194,6 +194,18 @@ class ContribRadarTests(unittest.TestCase):
         )
 
         self.assertEqual([issue["number"] for issue in filtered], [1, 2, 3])
+
+    def test_filter_issues_by_label_treats_common_separators_as_equivalent(self):
+        issues = [
+            {"number": 1, "labels": [{"name": "needs-reproduction"}]},
+            {"number": 2, "labels": [{"name": "needs_reproduction"}]},
+            {"number": 3, "labels": [{"name": "needs reproduction"}]},
+            {"number": 4, "labels": [{"name": "ready"}]},
+        ]
+
+        filtered = filter_issues_by_label(issues, exclude_labels=["needs reproduction"])
+
+        self.assertEqual([issue["number"] for issue in filtered], [4])
 
     def test_filter_issues_by_label_can_require_all_included_labels(self):
         issues = [
