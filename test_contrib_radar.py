@@ -13,6 +13,7 @@ from contrib_radar import (
     filter_issues_by_workflow,
     filter_ranked,
     limit_ranked_per_repo,
+    load_issues_from_file_or_stdin,
     load_issues_from_gh,
     load_issues_from_repos,
     load_repos_from_file,
@@ -515,6 +516,23 @@ class ContribRadarTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())
         self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_load_issues_accepts_wrapped_items_payload(self):
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8") as handle:
+            json.dump({"items": [{"number": 1, "title": "Fix CLI"}]}, handle)
+            handle.flush()
+
+            issues = load_issues_from_file_or_stdin(handle.name)
+
+        self.assertEqual(issues, [{"number": 1, "title": "Fix CLI"}])
+
+    def test_load_issues_rejects_non_issue_object_payload(self):
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8") as handle:
+            json.dump({"total_count": 1}, handle)
+            handle.flush()
+
+            with self.assertRaisesRegex(SystemExit, "expected a JSON array of issues"):
+                load_issues_from_file_or_stdin(handle.name)
 
     def test_load_issues_from_gh_invokes_issue_list(self):
         completed = subprocess.CompletedProcess(

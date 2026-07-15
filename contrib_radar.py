@@ -507,8 +507,14 @@ def load_repos_from_file(path: str) -> list[str]:
 
 
 def load_issues_from_file_or_stdin(path: str | None) -> list[dict[str, Any]]:
-    raw = open(path, encoding="utf-8").read() if path else sys.stdin.read()
+    if path:
+        with open(path, encoding="utf-8") as handle:
+            raw = handle.read()
+    else:
+        raw = sys.stdin.read()
     data = json.loads(raw)
+    if isinstance(data, dict) and isinstance(data.get("items"), list):
+        data = data["items"]
     if not isinstance(data, list):
         raise SystemExit("expected a JSON array of issues")
     return data
