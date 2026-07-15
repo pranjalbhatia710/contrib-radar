@@ -30,6 +30,12 @@ python3 contrib_radar.py issues.json --limit 10
 # Show only high-confidence candidates for a focused contribution session.
 python3 contrib_radar.py issues.json --min-score 80 --limit 5
 
+# Treat an empty filtered shortlist as a CI/smoke-test failure.
+python3 contrib_radar.py issues.json --min-score 90 --fail-on-empty
+
+# JSON array exports and newline-delimited JSON issue streams are both accepted.
+python3 contrib_radar.py examples/sample-issues.jsonl --format csv --limit 10
+
 # Focus on bug/docs work and skip known blocked queues before scoring.
 python3 contrib_radar.py issues.json \
   --include-label bug \
