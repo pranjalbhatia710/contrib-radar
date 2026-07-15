@@ -377,6 +377,18 @@ class ContribRadarTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual([issue["number"] for issue in payload], [1])
 
+    def test_main_can_fail_on_empty_result_set(self):
+        issues = [{"number": 1, "title": "Roadmap epic", "labels": [{"name": "stale"}], "comments": 20}]
+
+        from io import StringIO
+
+        stderr = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", StringIO()), patch("sys.stderr", stderr):
+            exit_code = main(["--min-score", "90", "--fail-on-empty"])
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("no issues matched filters", stderr.getvalue())
+
     def test_main_can_render_csv_output(self):
         issues = [
             {"number": 1, "title": "Fix crash", "url": "https://example.test/1", "comments": 0},

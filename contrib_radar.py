@@ -642,6 +642,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="include compact one-line issue body previews in markdown output",
     )
+    parser.add_argument(
+        "--fail-on-empty",
+        action="store_true",
+        help="exit with status 2 when filters produce no ranked candidates, useful for CI smoke checks",
+    )
     args = parser.parse_args(argv)
 
     if args.min_score is not None and not 0 <= args.min_score <= 100:
@@ -679,6 +684,9 @@ def main(argv: list[str] | None = None) -> int:
     include_text = expand_preset_terms(args.preset, args.include_text)
     data = filter_issues_by_text(data, include_terms=include_text, exclude_terms=args.exclude_text)
     ranked = limit_ranked_per_repo(filter_ranked(rank_issues(data), args.min_score), args.per_repo_limit)
+    if args.fail_on_empty and not ranked:
+        print("no issues matched filters", file=sys.stderr)
+        return 2
     if args.format == "json":
         print(render_json(ranked, args.limit), end="")
     elif args.format == "csv":
