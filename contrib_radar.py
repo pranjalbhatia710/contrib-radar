@@ -58,7 +58,7 @@ DOMAIN_PRESETS = {
 }
 BROAD_WORDS = re.compile(r"\b(epic|roadmap|architecture|rewrite|migration|tracking|umbrella|rfc)\b", re.I)
 CONCRETE_WORDS = re.compile(r"\b(fix|add|update|document|test|error|typo|crash|regression|missing)\b", re.I)
-GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,updatedAt,url"
+GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,createdAt,updatedAt,url"
 
 @dataclasses.dataclass(frozen=True)
 class RankedIssue:
@@ -182,6 +182,16 @@ def rank_issue(issue: dict[str, Any], now: datetime | None = None) -> RankedIssu
             score -= 14
             reasons.append("-14 likely stale")
 
+    created = _parse_time(issue.get("createdAt") or issue.get("created_at"))
+    if created:
+        age_days = (now - created).days
+        if age_days <= 30:
+            score += 4
+            reasons.append("+4 recently opened")
+        elif age_days >= 365:
+            score -= 8
+            reasons.append("-8 old issue age")
+
     return RankedIssue(
         score=max(0, min(score, 100)),
         number=int(issue.get("number") or 0),
@@ -302,24 +312,29 @@ def filter_issues_by_activity(
     issues: Iterable[dict[str, Any]],
     *,
     updated_within_days: int | None = None,
+    created_within_days: int | None = None,
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Filter raw issues by recent maintainer or reporter activity.
 
-    Issues without a parseable `updatedAt` timestamp are skipped when the filter
-    is active. That keeps focused contribution sessions from accidentally
-    targeting stale imported data.
+    Issues without a parseable timestamp for an active filter are skipped. That
+    keeps focused contribution sessions from accidentally targeting stale
+    imported data.
     """
-    if updated_within_days is None:
+    if updated_within_days is None and created_within_days is None:
         return list(issues)
     now = now or datetime.now(timezone.utc)
     filtered: list[dict[str, Any]] = []
     for issue in issues:
-        updated = _parse_time(issue.get("updatedAt") or issue.get("updated_at"))
-        if not updated:
-            continue
-        if (now - updated).days <= updated_within_days:
-            filtered.append(issue)
+        if updated_within_days is not None:
+            updated = _parse_time(issue.get("updatedAt") or issue.get("updated_at"))
+            if not updated or (now - updated).days > updated_within_days:
+                continue
+        if created_within_days is not None:
+            created = _parse_time(issue.get("createdAt") or issue.get("created_at"))
+            if not created or (now - created).days > created_within_days:
+                continue
+        filtered.append(issue)
     return filtered
 
 
@@ -606,6 +621,12 @@ def main(argv: list[str] | None = None) -> int:
         help="skip issues that have not been updated within this many days",
     )
     parser.add_argument(
+        "--created-within-days",
+        type=int,
+        default=None,
+        help="skip issues that were not opened within this many days",
+    )
+    parser.add_argument(
         "--include-text",
         action="append",
         default=[],
@@ -655,6 +676,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--max-comments must be zero or greater")
     if args.updated_within_days is not None and args.updated_within_days < 0:
         raise SystemExit("--updated-within-days must be zero or greater")
+    if args.created_within_days is not None and args.created_within_days < 0:
+        raise SystemExit("--created-within-days must be zero or greater")
     if args.per_repo_limit is not None and args.per_repo_limit < 1:
         raise SystemExit("--per-repo-limit must be at least 1")
 
@@ -680,7 +703,11 @@ def main(argv: list[str] | None = None) -> int:
         unassigned_only=args.unassigned_only,
         max_comments=args.max_comments,
     )
-    data = filter_issues_by_activity(data, updated_within_days=args.updated_within_days)
+    data = filter_issues_by_activity(
+        data,
+        updated_within_days=args.updated_within_days,
+        created_within_days=args.created_within_days,
+    )
     include_text = expand_preset_terms(args.preset, args.include_text)
     data = filter_issues_by_text(data, include_terms=include_text, exclude_terms=args.exclude_text)
     ranked = limit_ranked_per_repo(filter_ranked(rank_issues(data), args.min_score), args.per_repo_limit)

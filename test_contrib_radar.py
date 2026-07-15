@@ -294,6 +294,13 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertTrue(any("recently active" in reason for reason in ranked.reasons))
 
+    def test_rank_issue_scores_recently_opened_and_old_issue_age(self):
+        recent = rank_issue({"number": 1, "title": "Fix crash", "createdAt": "2026-05-20T00:00:00Z"}, now=NOW)
+        old = rank_issue({"number": 2, "title": "Fix crash", "createdAt": "2024-05-20T00:00:00Z"}, now=NOW)
+
+        self.assertIn("+4 recently opened", recent.reasons)
+        self.assertIn("-8 old issue age", old.reasons)
+
     def test_filter_issues_by_text_includes_title_or_body_matches(self):
         issues = [
             {"number": 1, "title": "Fix CAD export", "body": ""},
@@ -357,6 +364,10 @@ class ContribRadarTests(unittest.TestCase):
     def test_main_rejects_invalid_updated_within_days(self):
         with self.assertRaisesRegex(SystemExit, "--updated-within-days must be zero or greater"):
             main(["--updated-within-days", "-1"])
+
+    def test_main_rejects_invalid_created_within_days(self):
+        with self.assertRaisesRegex(SystemExit, "--created-within-days must be zero or greater"):
+            main(["--created-within-days", "-1"])
 
     def test_main_rejects_invalid_per_repo_limit(self):
         with self.assertRaisesRegex(SystemExit, "--per-repo-limit must be at least 1"):
@@ -504,6 +515,26 @@ class ContribRadarTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual([issue["number"] for issue in payload], [1])
 
+    def test_main_applies_created_within_filter_before_scoring(self):
+        issues = [
+            {"number": 1, "title": "Fix newly opened crash", "createdAt": "2026-06-01T00:00:00Z"},
+            {"number": 2, "title": "Fix old open crash", "createdAt": "2025-06-01T00:00:00Z"},
+            {"number": 3, "title": "Fix imported crash"},
+        ]
+
+        from io import StringIO
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout), patch(
+            "contrib_radar.datetime"
+        ) as fake_datetime:
+            fake_datetime.now.return_value = NOW
+            fake_datetime.fromisoformat = datetime.fromisoformat
+            exit_code = main(["--format", "json", "--created-within-days", "30"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [1])
+
     def test_main_applies_text_filters_before_scoring(self):
         issues = [
             {"number": 1, "title": "Fix agent trace export", "body": "Small failure."},
@@ -588,7 +619,7 @@ class ContribRadarTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("owner/repo", command)
         self.assertIn("25", command)
-        self.assertIn("number,title,body,labels,comments,assignees,updatedAt,url", command)
+        self.assertIn("number,title,body,labels,comments,assignees,createdAt,updatedAt,url", command)
 
     def test_load_issues_from_gh_reports_cli_errors(self):
         error = subprocess.CalledProcessError(1, ["gh"], stderr="not found")
