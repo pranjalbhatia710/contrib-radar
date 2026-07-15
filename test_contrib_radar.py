@@ -542,6 +542,25 @@ class ContribRadarTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "issue entry 2 must be a JSON object"):
                 load_issues_from_file_or_stdin(handle.name)
 
+    def test_load_issues_accepts_newline_delimited_json_exports(self):
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8") as handle:
+            handle.write('{"number": 1, "title": "Fix CLI"}\n')
+            handle.write('\n')
+            handle.write('{"number": 2, "title": "Add tests"}\n')
+            handle.flush()
+
+            issues = load_issues_from_file_or_stdin(handle.name)
+
+        self.assertEqual([issue["number"] for issue in issues], [1, 2])
+
+    def test_load_issues_names_bad_jsonl_line(self):
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8") as handle:
+            handle.write('{"number": 1}\nnot-json\n')
+            handle.flush()
+
+            with self.assertRaisesRegex(SystemExit, "line 2 is not valid JSON"):
+                load_issues_from_file_or_stdin(handle.name)
+
     def test_load_issues_from_gh_invokes_issue_list(self):
         completed = subprocess.CompletedProcess(
             args=[],

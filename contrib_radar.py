@@ -506,13 +506,34 @@ def load_repos_from_file(path: str) -> list[str]:
     return repos
 
 
+def _loads_issue_payload(raw: str) -> Any:
+    """Parse JSON array/object payloads or newline-delimited issue objects."""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as array_error:
+        issues: list[Any] = []
+        saw_jsonl_line = False
+        for line_number, raw_line in enumerate(raw.splitlines(), start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            saw_jsonl_line = True
+            try:
+                issues.append(json.loads(line))
+            except json.JSONDecodeError as line_error:
+                raise SystemExit(f"line {line_number} is not valid JSON: {line_error.msg}") from line_error
+        if saw_jsonl_line:
+            return issues
+        raise SystemExit(f"expected valid JSON issue data: {array_error.msg}") from array_error
+
+
 def load_issues_from_file_or_stdin(path: str | None) -> list[dict[str, Any]]:
     if path:
         with open(path, encoding="utf-8") as handle:
             raw = handle.read()
     else:
         raw = sys.stdin.read()
-    data = json.loads(raw)
+    data = _loads_issue_payload(raw)
     if isinstance(data, dict) and isinstance(data.get("items"), list):
         data = data["items"]
     if not isinstance(data, list):
