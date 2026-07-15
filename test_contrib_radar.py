@@ -534,6 +534,14 @@ class ContribRadarTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "expected a JSON array of issues"):
                 load_issues_from_file_or_stdin(handle.name)
 
+    def test_load_issues_rejects_non_object_issue_entries(self):
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8") as handle:
+            json.dump([{"number": 1}, "not-an-issue"], handle)
+            handle.flush()
+
+            with self.assertRaisesRegex(SystemExit, "issue entry 2 must be a JSON object"):
+                load_issues_from_file_or_stdin(handle.name)
+
     def test_load_issues_from_gh_invokes_issue_list(self):
         completed = subprocess.CompletedProcess(
             args=[],

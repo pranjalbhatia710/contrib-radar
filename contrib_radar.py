@@ -517,6 +517,9 @@ def load_issues_from_file_or_stdin(path: str | None) -> list[dict[str, Any]]:
         data = data["items"]
     if not isinstance(data, list):
         raise SystemExit("expected a JSON array of issues")
+    for index, issue in enumerate(data, start=1):
+        if not isinstance(issue, dict):
+            raise SystemExit(f"issue entry {index} must be a JSON object")
     return data
 
 
