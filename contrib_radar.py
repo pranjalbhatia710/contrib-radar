@@ -58,6 +58,10 @@ DOMAIN_PRESETS = {
 }
 BROAD_WORDS = re.compile(r"\b(epic|roadmap|architecture|rewrite|migration|tracking|umbrella|rfc)\b", re.I)
 CONCRETE_WORDS = re.compile(r"\b(fix|add|update|document|test|error|typo|crash|regression|missing)\b", re.I)
+REPRODUCTION_WORDS = re.compile(
+    r"\b(reproducer|reproduction|steps to reproduce|expected behavior|actual behavior|traceback|stack trace)\b",
+    re.I,
+)
 GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,createdAt,updatedAt,url"
 
 
@@ -184,6 +188,9 @@ def rank_issue(issue: dict[str, Any], now: datetime | None = None) -> RankedIssu
     if CONCRETE_WORDS.search(text):
         score += 8
         reasons.append("+8 concrete action words")
+    if REPRODUCTION_WORDS.search(text):
+        score += 6
+        reasons.append("+6 reproduction details")
     if BROAD_WORDS.search(text):
         score -= 16
         reasons.append("-16 broad/planning words")

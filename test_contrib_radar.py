@@ -87,6 +87,20 @@ class ContribRadarTests(unittest.TestCase):
         self.assertLess(ranked.score, 20)
         self.assertTrue(any("assigned" in reason for reason in ranked.reasons))
 
+    def test_rank_issue_rewards_reproduction_details(self):
+        issue = {
+            "number": 11,
+            "title": "Fix CLI crash on empty exports",
+            "body": "Steps to reproduce: run with []. Expected behavior: an empty report. Actual behavior: traceback.",
+            "labels": [{"name": "bug"}],
+            "comments": 1,
+        }
+
+        ranked = rank_issue(issue, now=NOW)
+
+        self.assertIn("+6 reproduction details", ranked.reasons)
+        self.assertGreaterEqual(ranked.score, 80)
+
     def test_rank_issues_sorts_by_score_descending(self):
         issues = [
             {"number": 2, "title": "Roadmap epic", "labels": [{"name": "stale"}], "comments": 20},
