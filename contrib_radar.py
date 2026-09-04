@@ -389,6 +389,32 @@ def filter_issues_by_text(
     return filtered
 
 
+def filter_issues_by_quality(
+    issues: Iterable[dict[str, Any]],
+    *,
+    require_reproduction: bool = False,
+    exclude_broad: bool = False,
+) -> list[dict[str, Any]]:
+    """Filter raw issues for high-signal contribution session quality gates.
+
+    These gates are stricter than score penalties. They are useful for cron or CI
+    scout runs where a contributor would rather receive no candidates than a
+    shortlist containing vague planning threads or bugs without reproducible
+    context.
+    """
+    if not require_reproduction and not exclude_broad:
+        return list(issues)
+    filtered: list[dict[str, Any]] = []
+    for issue in issues:
+        text = f"{issue.get('title') or ''}\n{issue.get('body') or ''}"
+        if require_reproduction and not REPRODUCTION_WORDS.search(text):
+            continue
+        if exclude_broad and BROAD_WORDS.search(text):
+            continue
+        filtered.append(issue)
+    return filtered
+
+
 def expand_preset_terms(presets: Iterable[str], include_terms: Iterable[str] | None = None) -> list[str]:
     """Return include-text terms with domain preset terms appended in CLI order."""
     expanded = [term for term in include_terms or [] if term.strip()]
@@ -681,6 +707,16 @@ def main(argv: list[str] | None = None) -> int:
         help="skip issues whose title or body contains this text; repeat for multiple terms",
     )
     parser.add_argument(
+        "--require-reproduction",
+        action="store_true",
+        help="only consider issues whose title/body includes reproduction details such as steps, expected/actual behavior, traceback, or stack trace",
+    )
+    parser.add_argument(
+        "--exclude-broad",
+        action="store_true",
+        help="skip broad planning issues before scoring, instead of only penalizing them",
+    )
+    parser.add_argument(
         "--min-score",
         type=int,
         default=None,
@@ -753,6 +789,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     include_text = expand_preset_terms(args.preset, args.include_text)
     data = filter_issues_by_text(data, include_terms=include_text, exclude_terms=args.exclude_text)
+    data = filter_issues_by_quality(
+        data,
+        require_reproduction=args.require_reproduction,
+        exclude_broad=args.exclude_broad,
+    )
     ranked = limit_ranked_per_repo(filter_ranked(rank_issues(data), args.min_score), args.per_repo_limit)
     if args.fail_on_empty and not ranked:
         print("no issues matched filters", file=sys.stderr)

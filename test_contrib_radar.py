@@ -10,6 +10,7 @@ from contrib_radar import (
     expand_preset_terms,
     filter_issues_by_activity,
     filter_issues_by_label,
+    filter_issues_by_quality,
     filter_issues_by_text,
     filter_issues_by_workflow,
     filter_ranked,
@@ -374,6 +375,44 @@ class ContribRadarTests(unittest.TestCase):
         )
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
+
+    def test_filter_issues_by_quality_requires_reproduction_details(self):
+        issues = [
+            {"number": 1, "title": "Fix CLI crash", "body": "Steps to reproduce: run export with []."},
+            {"number": 2, "title": "Fix CLI crash", "body": "It fails sometimes."},
+            {"number": 3, "title": "Add stack trace handling", "body": ""},
+        ]
+
+        filtered = filter_issues_by_quality(issues, require_reproduction=True)
+
+        self.assertEqual([issue["number"] for issue in filtered], [1, 3])
+
+    def test_filter_issues_by_quality_excludes_broad_planning_threads(self):
+        issues = [
+            {"number": 1, "title": "Fix focused install bug", "body": "Expected behavior is documented."},
+            {"number": 2, "title": "Architecture roadmap", "body": "Umbrella migration plan."},
+        ]
+
+        filtered = filter_issues_by_quality(issues, exclude_broad=True)
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
+    def test_main_applies_quality_filters_before_scoring(self):
+        issues = [
+            {"number": 1, "title": "Fix CLI crash", "body": "Steps to reproduce and expected behavior."},
+            {"number": 2, "title": "Fix CLI crash", "body": "Needs investigation."},
+            {"number": 3, "title": "Architecture roadmap", "body": "Steps to reproduce one planning case."},
+        ]
+
+        from io import StringIO
+
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main(["--format", "json", "--require-reproduction", "--exclude-broad"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [1])
 
     def test_expand_preset_terms_appends_domain_terms(self):
         terms = expand_preset_terms(["cad", "ai-agents"], ["docs"])

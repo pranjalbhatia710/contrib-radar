@@ -84,12 +84,19 @@ python3 contrib_radar.py \
 printf "modelcontextprotocol/python-sdk\nhttps://github.com/CadQuery/cadquery\ngit@github.com:huggingface/lerobot.git\n" > targets.txt
 python3 contrib_radar.py --repo-file targets.txt --preset ai-agents --preset robotics
 
-# Focus a session on a domain and remove risky broad work before scoring.
-python3 contrib_radar.py --repo owner/repo \
+python3 contrib_radar.py \
+  --repo owner/repo \
   --include-text agent \
   --include-text cad \
   --exclude-text "breaking change" \
   --exclude-text migration
+
+# For bug-fix scouting, require reproducible context and drop broad planning threads.
+python3 contrib_radar.py issues.json \
+  --include-label bug \
+  --require-reproduction \
+  --exclude-broad \
+  --fail-on-empty
 
 # Use curated domain presets for common high-signal contribution areas.
 python3 contrib_radar.py \
@@ -140,7 +147,11 @@ touched recently by bot churn or long-running discussion. Repeated
 matching is case-insensitive and treats spaces, hyphens, and underscores as
 equivalent, so filters such as `--exclude-label "needs reproduction"` also catch
 `needs-reproduction` and `needs_reproduction`. Use
-`--include-text` and `--exclude-text` to focus a session on domain terms or skip
+`--require-reproduction` for bug-fix scans that should only surface issues with
+steps, expected/actual behavior, traceback, or stack-trace context; combine it
+with `--exclude-broad` when a cron or CI scouting run should omit roadmap,
+epic, rewrite, migration, and other planning threads entirely before scoring.
+Use `--include-text` and `--exclude-text` to focus a session on domain terms or skip
 risky phrases before scoring; include terms are OR-ed, while exclude terms always
 win. Use `--preset` to add curated include terms for `ai-agents`, `cad`,
 `robotics`, `frontend`, or `devtools` without memorizing common project keywords.
