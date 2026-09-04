@@ -135,6 +135,28 @@ class ContribRadarTests(unittest.TestCase):
         self.assertNotIn("Snippet:", without_snippet)
         self.assertIn("Snippet: First line. Second line with setup context.", with_snippet)
 
+    def test_render_markdown_can_show_all_reasons(self):
+        ranked = [
+            rank_issue(
+                {
+                    "number": 5,
+                    "title": "Fix reproducible crash",
+                    "body": "Steps to reproduce include expected behavior and actual behavior.",
+                    "labels": [{"name": "bug"}, {"name": "help wanted"}],
+                    "comments": 0,
+                    "updatedAt": "2026-06-01T00:00:00Z",
+                    "createdAt": "2026-06-01T00:00:00Z",
+                },
+                now=NOW,
+            )
+        ]
+
+        limited = render_markdown(ranked, limit=1, reason_limit=2)
+        complete = render_markdown(ranked, limit=1, reason_limit=None)
+
+        self.assertNotIn("reproduction details", limited)
+        self.assertIn("reproduction details", complete)
+
     def test_render_json_outputs_machine_readable_scores(self):
         ranked = [rank_issue({"number": 3, "title": "Fix crash", "url": "https://example.test/3"}, now=NOW)]
         output = render_json(ranked, limit=1)
@@ -399,6 +421,10 @@ class ContribRadarTests(unittest.TestCase):
     def test_main_rejects_invalid_per_repo_limit(self):
         with self.assertRaisesRegex(SystemExit, "--per-repo-limit must be at least 1"):
             main(["--per-repo-limit", "0"])
+
+    def test_main_rejects_invalid_reason_limit(self):
+        with self.assertRaisesRegex(SystemExit, "--reason-limit must be zero or greater"):
+            main(["--reason-limit", "-1"])
 
     def test_main_filters_json_output_by_min_score(self):
         issues = [

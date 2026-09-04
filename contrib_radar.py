@@ -401,11 +401,18 @@ def expand_preset_terms(presets: Iterable[str], include_terms: Iterable[str] | N
     return expanded
 
 
-def render_markdown(ranked: list[RankedIssue], limit: int, *, show_snippets: bool = False) -> str:
+def render_markdown(
+    ranked: list[RankedIssue],
+    limit: int,
+    *,
+    show_snippets: bool = False,
+    reason_limit: int | None = 4,
+) -> str:
     lines = ["# contrib-radar results", ""]
     for issue in ranked[:limit]:
         labels = ", ".join(issue.labels) if issue.labels else "none"
-        reasons = "; ".join(issue.reasons[:4]) if issue.reasons else "baseline score"
+        visible_reasons = issue.reasons if reason_limit is None else issue.reasons[:reason_limit]
+        reasons = "; ".join(visible_reasons) if visible_reasons else "baseline score"
         lines.append(f"## {issue.score}/100 · #{issue.number} · {issue.title}")
         if issue.url:
             lines.append(f"URL: {issue.url}")
@@ -692,6 +699,12 @@ def main(argv: list[str] | None = None) -> int:
         help="include compact one-line issue body previews in markdown output",
     )
     parser.add_argument(
+        "--reason-limit",
+        type=int,
+        default=4,
+        help="number of scoring reasons to show per markdown issue; use 0 for all reasons",
+    )
+    parser.add_argument(
         "--fail-on-empty",
         action="store_true",
         help="exit with status 2 when filters produce no ranked candidates, useful for CI smoke checks",
@@ -708,6 +721,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--created-within-days must be zero or greater")
     if args.per_repo_limit is not None and args.per_repo_limit < 1:
         raise SystemExit("--per-repo-limit must be at least 1")
+    if args.reason_limit < 0:
+        raise SystemExit("--reason-limit must be zero or greater")
 
     repos = list(args.repo)
     for repo_file in args.repo_file:
@@ -747,7 +762,8 @@ def main(argv: list[str] | None = None) -> int:
     elif args.format == "csv":
         print(render_csv(ranked, args.limit, show_snippets=args.show_snippets), end="")
     else:
-        print(render_markdown(ranked, args.limit, show_snippets=args.show_snippets), end="")
+        reason_limit = None if args.reason_limit == 0 else args.reason_limit
+        print(render_markdown(ranked, args.limit, show_snippets=args.show_snippets, reason_limit=reason_limit), end="")
     return 0
 
 
