@@ -60,6 +60,25 @@ BROAD_WORDS = re.compile(r"\b(epic|roadmap|architecture|rewrite|migration|tracki
 CONCRETE_WORDS = re.compile(r"\b(fix|add|update|document|test|error|typo|crash|regression|missing)\b", re.I)
 GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,createdAt,updatedAt,url"
 
+
+def _normalize_repo_ref(value: str) -> str:
+    """Return ``owner/repo`` from common GitHub repository reference formats."""
+    repo = value.strip()
+    if repo.startswith(("https://", "http://")):
+        match = re.match(r"https?://github\.com/([^/]+)/([^/#?]+)", repo)
+        if not match:
+            raise SystemExit(f"expected a GitHub repository URL, got {value!r}")
+        repo = f"{match.group(1)}/{match.group(2)}"
+    elif repo.startswith("git@github.com:"):
+        repo = repo.removeprefix("git@github.com:")
+    elif repo.startswith("github.com/"):
+        repo = repo.removeprefix("github.com/")
+    repo = repo.removesuffix(".git").strip("/")
+    parts = repo.split("/")
+    if len(parts) != 2 or not all(parts):
+        raise SystemExit(f"expected owner/repo, got {value!r}")
+    return "/".join(parts)
+
 @dataclasses.dataclass(frozen=True)
 class RankedIssue:
     score: int
@@ -476,11 +495,12 @@ def load_issues_from_repos(
     """
     combined: list[dict[str, Any]] = []
     saw_repo = False
-    for repo in repos:
-        repo = repo.strip()
-        if not repo:
+    for repo_ref in repos:
+        repo_ref = repo_ref.strip()
+        if not repo_ref:
             continue
         saw_repo = True
+        repo = _normalize_repo_ref(repo_ref)
         try:
             issues = load_issues_from_gh(repo, issue_limit)
         except SystemExit as exc:
@@ -511,9 +531,10 @@ def load_repos_from_file(path: str) -> list[str]:
                     line = line.split("#", 1)[0].strip()
                 if not line:
                     continue
-                if "/" not in line:
-                    raise SystemExit(f"{path}:{line_number}: expected owner/repo, got {line!r}")
-                repos.append(line)
+                try:
+                    repos.append(_normalize_repo_ref(line))
+                except SystemExit as exc:
+                    raise SystemExit(f"{path}:{line_number}: {exc}") from exc
     except OSError as exc:
         raise SystemExit(f"could not read --repo-file {path!r}: {exc.strerror}") from exc
     if not repos:

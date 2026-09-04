@@ -76,7 +76,9 @@ python3 contrib_radar.py \
   --max-comments 3
 
 # Keep recurring scouting targets in a file for daily contribution sessions.
-printf "modelcontextprotocol/python-sdk\nCadQuery/cadquery\nhuggingface/lerobot\n" > targets.txt
+# Plain owner/repo entries, GitHub URLs, and git@github.com:owner/repo.git SSH
+# remotes are normalized to owner/repo before fetching.
+printf "modelcontextprotocol/python-sdk\nhttps://github.com/CadQuery/cadquery\ngit@github.com:huggingface/lerobot.git\n" > targets.txt
 python3 contrib_radar.py --repo-file targets.txt --preset ai-agents --preset robotics
 
 # Focus a session on a domain and remove risky broad work before scoring.

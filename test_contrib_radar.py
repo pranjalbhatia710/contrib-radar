@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from contrib_radar import (
+    _normalize_repo_ref,
     expand_preset_terms,
     filter_issues_by_activity,
     filter_issues_by_label,
@@ -29,6 +30,18 @@ NOW = datetime(2026, 6, 3, tzinfo=timezone.utc)
 
 
 class ContribRadarTests(unittest.TestCase):
+    def test_normalize_repo_ref_accepts_common_github_forms(self):
+        self.assertEqual(_normalize_repo_ref("owner/repo"), "owner/repo")
+        self.assertEqual(_normalize_repo_ref("https://github.com/owner/repo"), "owner/repo")
+        self.assertEqual(_normalize_repo_ref("https://github.com/owner/repo/issues"), "owner/repo")
+        self.assertEqual(_normalize_repo_ref("git@github.com:owner/repo.git"), "owner/repo")
+
+    def test_normalize_repo_ref_rejects_non_repo_values(self):
+        with self.assertRaises(SystemExit):
+            _normalize_repo_ref("owner")
+        with self.assertRaises(SystemExit):
+            _normalize_repo_ref("https://example.com/owner/repo")
+
     def test_good_first_issue_scores_high(self):
         issue = {
             "number": 7,
