@@ -66,6 +66,9 @@ python3 contrib_radar.py --repo owner/repo --include-label "help wanted" --exclu
 # Include compact body previews when deciding whether to open full issues.
 python3 contrib_radar.py --repo owner/repo --min-score 80 --show-snippets
 
+# Show every scoring reason when auditing why an issue ranked above another.
+python3 contrib_radar.py --repo owner/repo --reason-limit 0 --limit 5
+
 # Scan a small shortlist of target projects in one ranked pass.
 python3 contrib_radar.py \
   --repo owner/agent-project \
@@ -166,6 +169,8 @@ Positive signals:
 - low comment churn
 - recent activity
 - concrete action words like `fix`, `add`, `update`, `document`, `test`
+- reproducibility details such as steps to reproduce, expected/actual behavior,
+  tracebacks, or stack traces
 
 Negative signals:
 
