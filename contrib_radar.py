@@ -62,6 +62,15 @@ REPRODUCTION_WORDS = re.compile(
     r"\b(reproducer|reproduction|steps to reproduce|expected behavior|actual behavior|traceback|stack trace)\b",
     re.I,
 )
+CLAIMED_WORK_WORDS = re.compile(
+    r"\b("
+    r"i['’]?d like to work on|i will work on|i can work on|"
+    r"i am working on|i['’]?m working on|happy to put up a pr|"
+    r"opened (?:a )?(?:draft )?pr|put together\s+#\d+|"
+    r"pr\s+#\d+|pull request\s+#\d+"
+    r")\b",
+    re.I,
+)
 GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,createdAt,updatedAt,url"
 
 
@@ -134,6 +143,29 @@ def _comment_count(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _comment_bodies(value: Any) -> Iterable[str]:
+    """Yield comment bodies from gh issue comment nodes or imported strings."""
+    if not isinstance(value, (list, tuple)):
+        return ()
+    bodies: list[str] = []
+    for comment in value:
+        if isinstance(comment, str):
+            bodies.append(comment)
+        elif isinstance(comment, dict) and comment.get("body"):
+            bodies.append(str(comment["body"]))
+    return bodies
+
+
+def issue_has_claimed_work(issue: dict[str, Any]) -> bool:
+    """Return True when comments suggest another contributor already picked it up.
+
+    This is intentionally heuristic and opt-in. It catches common low-signal
+    queues where issues remain open even after someone claims them or opens a
+    linked PR, helping recurring scouting avoid duplicate contributions.
+    """
+    return any(CLAIMED_WORK_WORDS.search(body) for body in _comment_bodies(issue.get("comments")))
 
 
 def _body_snippet(body: str, limit: int = 240) -> str:
@@ -317,18 +349,21 @@ def filter_issues_by_workflow(
     *,
     unassigned_only: bool = False,
     max_comments: int | None = None,
+    exclude_claimed: bool = False,
 ) -> list[dict[str, Any]]:
     """Filter raw issues for contribution-session workflow constraints.
 
     These filters are intentionally separate from scoring: sometimes contributors
-    need to completely skip assigned or high-churn issues instead of merely
-    ranking them lower.
+    need to completely skip assigned, claimed, or high-churn issues instead of
+    merely ranking them lower.
     """
     filtered: list[dict[str, Any]] = []
     for issue in issues:
         if unassigned_only and issue.get("assignees"):
             continue
         if max_comments is not None and _comment_count(issue.get("comments")) > max_comments:
+            continue
+        if exclude_claimed and issue_has_claimed_work(issue):
             continue
         filtered.append(issue)
     return filtered
@@ -676,6 +711,11 @@ def main(argv: list[str] | None = None) -> int:
         help="skip issues with more than this many comments before scoring",
     )
     parser.add_argument(
+        "--exclude-claimed",
+        action="store_true",
+        help="skip issues whose comments indicate someone is already working on them or opened a PR",
+    )
+    parser.add_argument(
         "--updated-within-days",
         type=int,
         default=None,
@@ -781,6 +821,7 @@ def main(argv: list[str] | None = None) -> int:
         data,
         unassigned_only=args.unassigned_only,
         max_comments=args.max_comments,
+        exclude_claimed=args.exclude_claimed,
     )
     data = filter_issues_by_activity(
         data,

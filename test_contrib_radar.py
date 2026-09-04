@@ -14,6 +14,7 @@ from contrib_radar import (
     filter_issues_by_text,
     filter_issues_by_workflow,
     filter_ranked,
+    issue_has_claimed_work,
     limit_ranked_per_repo,
     load_issues_from_file_or_stdin,
     load_issues_from_gh,
@@ -309,6 +310,26 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual([issue["number"] for issue in filtered], [1])
 
+    def test_issue_has_claimed_work_detects_claims_and_pr_links(self):
+        claimed = {"comments": [{"body": "I opened draft PR #123 with a regression test."}]}
+        linked = {"comments": [{"body": "I put together #3390 to pass through the event."}]}
+        unclaimed = {"comments": [{"body": "This is still reproducible on main."}]}
+
+        self.assertTrue(issue_has_claimed_work(claimed))
+        self.assertTrue(issue_has_claimed_work(linked))
+        self.assertFalse(issue_has_claimed_work(unclaimed))
+
+    def test_filter_issues_by_workflow_can_skip_claimed_issues(self):
+        issues = [
+            {"number": 1, "comments": [{"body": "Clear reproducer; no one has picked it up."}]},
+            {"number": 2, "comments": [{"body": "I'd like to work on this."}]},
+            {"number": 3, "comments": [{"body": "PR #55 is ready for review."}]},
+        ]
+
+        filtered = filter_issues_by_workflow(issues, exclude_claimed=True)
+
+        self.assertEqual([issue["number"] for issue in filtered], [1])
+
     def test_rank_issue_counts_gh_comment_nodes(self):
         issue = {"number": 1, "title": "Fix crash", "comments": [{"body": "one"}, {"body": "two"}]}
 
@@ -583,6 +604,21 @@ class ContribRadarTests(unittest.TestCase):
         stdout = StringIO()
         with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
             exit_code = main(["--format", "json", "--unassigned-only", "--max-comments", "3"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([issue["number"] for issue in payload], [1])
+
+    def test_main_can_exclude_claimed_work(self):
+        issues = [
+            {"number": 1, "title": "Fix unclaimed crash", "comments": [{"body": "Reproducible on main."}]},
+            {"number": 2, "title": "Fix claimed crash", "comments": [{"body": "I will work on this."}]},
+        ]
+
+        from io import StringIO
+        stdout = StringIO()
+        with patch("sys.stdin", StringIO(json.dumps(issues))), patch("sys.stdout", stdout):
+            exit_code = main(["--format", "json", "--exclude-claimed"])
 
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())

@@ -43,6 +43,7 @@ python3 contrib_radar.py issues.json \
   --exclude-label blocked \
   --exclude-label "needs reproduction" \
   --unassigned-only \
+  --exclude-claimed \
   --max-comments 3 \
   --updated-within-days 30 \
   --created-within-days 180 \
@@ -137,9 +138,10 @@ for every ranked issue. Use repeated `--repo` flags for a one-off shortlist, or
 `--repo-file targets.txt` for newline-delimited recurring target lists; blank
 lines and `#` comments are ignored.
 
-Use `--unassigned-only`, `--max-comments N`, and `--updated-within-days N` when
-you want a contribution session to skip already-owned, high-churn, or stale
-issues entirely, rather than merely penalizing them in the score. Add
+Use `--unassigned-only`, `--exclude-claimed`, `--max-comments N`, and
+`--updated-within-days N` when you want a contribution session to skip
+already-owned, comment-claimed, PR-linked, high-churn, or stale issues entirely,
+rather than merely penalizing them in the score. Add
 `--created-within-days N` when you want to avoid ancient issues that were only
 touched recently by bot churn or long-running discussion. Repeated
 `--include-label` flags are treated as a union by default; add
