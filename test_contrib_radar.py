@@ -221,6 +221,27 @@ class ContribRadarTests(unittest.TestCase):
 
         self.assertEqual(limit_ranked_per_repo(ranked), ranked)
 
+    def test_issue_has_claimed_work_detects_closing_pr_references(self):
+        issue = {
+            "number": 5,
+            "comments": [],
+            "closedByPullRequestsReferences": [
+                {"number": 42, "url": "https://github.com/owner/repo/pull/42"},
+            ],
+        }
+
+        self.assertTrue(issue_has_claimed_work(issue))
+
+    def test_exclude_claimed_skips_closing_pr_references(self):
+        issues = [
+            {"number": 1, "closedByPullRequestsReferences": [{"number": 10}]},
+            {"number": 2, "comments": []},
+        ]
+
+        filtered = filter_issues_by_workflow(issues, exclude_claimed=True)
+
+        self.assertEqual([issue["number"] for issue in filtered], [2])
+
     def test_filter_issues_by_label_includes_any_requested_label(self):
         issues = [
             {"number": 1, "labels": [{"name": "bug"}]},
@@ -747,7 +768,7 @@ class ContribRadarTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("owner/repo", command)
         self.assertIn("25", command)
-        self.assertIn("number,title,body,labels,comments,assignees,createdAt,updatedAt,url", command)
+        self.assertIn("closedByPullRequestsReferences", command[-1])
 
     def test_load_issues_from_gh_reports_cli_errors(self):
         error = subprocess.CalledProcessError(1, ["gh"], stderr="not found")

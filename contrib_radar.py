@@ -71,7 +71,7 @@ CLAIMED_WORK_WORDS = re.compile(
     r")\b",
     re.I,
 )
-GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,createdAt,updatedAt,url"
+GH_ISSUE_FIELDS = "number,title,body,labels,comments,assignees,closedByPullRequestsReferences,createdAt,updatedAt,url"
 
 
 def _normalize_repo_ref(value: str) -> str:
@@ -162,9 +162,13 @@ def issue_has_claimed_work(issue: dict[str, Any]) -> bool:
     """Return True when comments suggest another contributor already picked it up.
 
     This is intentionally heuristic and opt-in. It catches common low-signal
-    queues where issues remain open even after someone claims them or opens a
-    linked PR, helping recurring scouting avoid duplicate contributions.
+    queues where issues remain open even after someone claims them, opens a
+    linked PR in comments, or connects a closing PR reference, helping recurring
+    scouting avoid duplicate contributions.
     """
+    linked_prs = issue.get("closedByPullRequestsReferences")
+    if isinstance(linked_prs, (list, tuple)) and linked_prs:
+        return True
     return any(CLAIMED_WORK_WORDS.search(body) for body in _comment_bodies(issue.get("comments")))
 
 
